@@ -49,7 +49,7 @@ function App() {
       formData.append("jobDescription", jobDescription);
 
       const response = await fetch(
-        "http://localhost:5000/api/analyze",
+        'https://ai-resume-analyzer-production-330b.up.railway.app/api/analyze',
         {
           method: "POST",
           body: formData,
