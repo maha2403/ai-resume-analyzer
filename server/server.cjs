@@ -6,15 +6,34 @@ const { PDFParse } = require("pdf-parse");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+// ===============================
+// MIDDLEWARE
+// ===============================
+
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+  })
+);
+
 app.use(express.json());
+
+// ===============================
+// FILE UPLOAD
+// ===============================
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024
-  }
+    fileSize: 5 * 1024 * 1024,
+  },
 });
+
+// ===============================
+// SKILLS
+// ===============================
 
 const skillsList = [
   "JavaScript",
@@ -53,8 +72,12 @@ const skillsList = [
   "Flask",
   "Firebase",
   "Docker",
-  "Linux"
+  "Linux",
 ];
+
+// ===============================
+// RESUME SECTIONS
+// ===============================
 
 const sectionNames = [
   "summary",
@@ -70,15 +93,23 @@ const sectionNames = [
   "certifications",
   "certificate",
   "achievements",
+  "achievement",
   "internship",
   "internships",
   "contact",
   "profile",
-  "languages"
+  "languages",
+  "linkedin",
+  "github",
 ];
+
+// ===============================
+// FIND SKILLS
+// ===============================
 
 function findSkills(text) {
   const lowerText = text.toLowerCase();
+
   const foundSkills = [];
 
   for (const skill of skillsList) {
@@ -90,8 +121,13 @@ function findSkills(text) {
   return [...new Set(foundSkills)];
 }
 
+// ===============================
+// FIND SECTIONS
+// ===============================
+
 function findSections(text) {
   const lowerText = text.toLowerCase();
+
   const foundSections = [];
 
   for (const section of sectionNames) {
@@ -103,18 +139,35 @@ function findSections(text) {
   return [...new Set(foundSections)];
 }
 
+// ===============================
+// ATS SCORE
+// ===============================
+
 function calculateATS(text, skills, sections) {
   let score = 25;
 
   score += Math.min(skills.length * 3, 30);
+
   score += Math.min(sections.length * 4, 28);
 
-  if (text.length > 1000) score += 5;
-  if (text.length > 2000) score += 5;
-  if (text.length > 3000) score += 5;
+  if (text.length > 1000) {
+    score += 5;
+  }
+
+  if (text.length > 2000) {
+    score += 5;
+  }
+
+  if (text.length > 3000) {
+    score += 5;
+  }
 
   return Math.min(score, 100);
 }
+
+// ===============================
+// JOB MATCH
+// ===============================
 
 function calculateJobMatch(resumeText, jobDescription) {
   if (!jobDescription || !jobDescription.trim()) {
@@ -132,22 +185,22 @@ function calculateJobMatch(resumeText, jobDescription) {
   const resumeWords = new Set(
     cleanResume
       .split(/\s+/)
-      .filter(word => word.length > 2)
+      .filter((word) => word.length > 2)
   );
 
   const jobWords = [
     ...new Set(
       cleanJob
         .split(/\s+/)
-        .filter(word => word.length > 2)
-    )
+        .filter((word) => word.length > 2)
+    ),
   ];
 
   if (jobWords.length === 0) {
     return 0;
   }
 
-  const matchedWords = jobWords.filter(word =>
+  const matchedWords = jobWords.filter((word) =>
     resumeWords.has(word)
   );
 
@@ -159,8 +212,17 @@ function calculateJobMatch(resumeText, jobDescription) {
   );
 }
 
-function generateSuggestions(text, skills, jobDescription) {
+// ===============================
+// SUGGESTIONS
+// ===============================
+
+function generateSuggestions(
+  text,
+  skills,
+  jobDescription
+) {
   const suggestions = [];
+
   const lowerText = text.toLowerCase();
 
   if (
@@ -220,7 +282,10 @@ function generateSuggestions(text, skills, jobDescription) {
     );
   }
 
-  if (jobDescription && jobDescription.trim()) {
+  if (
+    jobDescription &&
+    jobDescription.trim()
+  ) {
     suggestions.push(
       "Customize your resume with keywords from the job description."
     );
@@ -229,21 +294,33 @@ function generateSuggestions(text, skills, jobDescription) {
   return [...new Set(suggestions)].slice(0, 7);
 }
 
+// ===============================
+// HOME
+// ===============================
+
 app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "ResumeAI backend is running",
-    status: "online"
+    status: "online",
   });
 });
+
+// ===============================
+// HEALTH CHECK
+// ===============================
 
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
     message: "API is working correctly",
-    status: "online"
+    status: "online",
   });
 });
+
+// ===============================
+// ANALYZE RESUME
+// ===============================
 
 app.post(
   "/api/analyze",
@@ -252,81 +329,164 @@ app.post(
     let parser = null;
 
     try {
+      console.log("=================================");
+      console.log("Resume analysis request received");
+      console.log("=================================");
+
+      // --------------------------------
+      // CHECK FILE
+      // --------------------------------
+
       if (!req.file) {
         return res.status(400).json({
           success: false,
-          error: "Please upload a PDF resume."
+          error: "Please upload a PDF resume.",
         });
       }
 
-      if (req.file.mimetype !== "application/pdf") {
+      console.log("File:", req.file.originalname);
+      console.log("MIME:", req.file.mimetype);
+      console.log("Size:", req.file.size);
+
+      // --------------------------------
+      // FILE TYPE CHECK
+      // --------------------------------
+
+      const fileName =
+        req.file.originalname.toLowerCase();
+
+      if (!fileName.endsWith(".pdf")) {
         return res.status(400).json({
           success: false,
-          error: "Only PDF resumes are supported."
+          error: "Only PDF resumes are supported.",
         });
       }
+
+      // --------------------------------
+      // JOB DESCRIPTION
+      // --------------------------------
 
       const jobDescription =
         req.body?.jobDescription || "";
 
+      // --------------------------------
+      // PDF PARSER
+      // --------------------------------
+
       console.log("Reading PDF...");
 
       parser = new PDFParse({
-        data: req.file.buffer
+        data: req.file.buffer,
       });
 
       const pdfData = await parser.getText();
 
-      const resumeText = pdfData?.text || "";
+      const resumeText =
+        pdfData?.text || "";
+
+      console.log(
+        "Extracted text length:",
+        resumeText.length
+      );
+
+      // --------------------------------
+      // EMPTY PDF CHECK
+      // --------------------------------
 
       if (!resumeText.trim()) {
         return res.status(400).json({
           success: false,
           error:
-            "No readable text found in this PDF."
+            "No readable text found in this PDF. Please upload a text-based PDF.",
         });
       }
 
-      const skills = findSkills(resumeText);
-      const sectionsFound = findSections(resumeText);
+      // --------------------------------
+      // ANALYSIS
+      // --------------------------------
 
-      const score = calculateATS(
-        resumeText,
-        skills,
-        sectionsFound
-      );
+      const skills =
+        findSkills(resumeText);
 
-      const jobMatchScore = calculateJobMatch(
-        resumeText,
-        jobDescription
-      );
+      const sectionsFound =
+        findSections(resumeText);
 
-      const suggestions = generateSuggestions(
-        resumeText,
-        skills,
-        jobDescription
-      );
+      const score =
+        calculateATS(
+          resumeText,
+          skills,
+          sectionsFound
+        );
 
-      res.json({
+      const jobMatchScore =
+        calculateJobMatch(
+          resumeText,
+          jobDescription
+        );
+
+      const suggestions =
+        generateSuggestions(
+          resumeText,
+          skills,
+          jobDescription
+        );
+
+      // --------------------------------
+      // RESPONSE
+      // --------------------------------
+
+      const result = {
         success: true,
-        fileName: req.file.originalname,
-        score: score,
-        skills: skills,
-        sectionsFound: sectionsFound,
-        jobMatchScore: jobMatchScore,
-        suggestions: suggestions
-      });
+
+        fileName:
+          req.file.originalname,
+
+        score,
+
+        skills,
+
+        sectionsFound,
+
+        jobMatchScore,
+
+        suggestions,
+      };
+
+      console.log(
+        "Analysis successful:",
+        result
+      );
+
+      return res.json(result);
 
     } catch (error) {
-      console.error("ANALYSIS ERROR:", error);
+      console.error(
+        "================================="
+      );
 
-      res.status(500).json({
+      console.error(
+        "ANALYSIS ERROR:",
+        error
+      );
+
+      console.error(
+        "================================="
+      );
+
+      return res.status(500).json({
         success: false,
-        error: "Unable to analyze resume.",
-        details: error.message
+        error:
+          "Unable to analyze resume.",
+        details:
+          error?.message ||
+          "Unknown server error.",
       });
 
     } finally {
+      // --------------------------------
+      // CLEAN PDF PARSER
+      // --------------------------------
+
       if (parser) {
         try {
           await parser.destroy();
@@ -341,29 +501,77 @@ app.post(
   }
 );
 
-app.use((error, req, res, next) => {
-  console.error("SERVER ERROR:", error);
+// ===============================
+// MULTER / SERVER ERROR HANDLER
+// ===============================
 
-  if (error instanceof multer.MulterError) {
-    if (error.code === "LIMIT_FILE_SIZE") {
+app.use(
+  (error, req, res, next) => {
+    console.error(
+      "SERVER ERROR:",
+      error
+    );
+
+    if (
+      error instanceof multer.MulterError
+    ) {
+      if (
+        error.code ===
+        "LIMIT_FILE_SIZE"
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "File is too large. Maximum size is 5 MB.",
+        });
+      }
+
       return res.status(400).json({
         success: false,
-        error: "File is too large. Maximum size is 5 MB."
+        error:
+          "File upload failed.",
       });
     }
+
+    return res.status(500).json({
+      success: false,
+      error:
+        error?.message ||
+        "Internal server error.",
+    });
   }
+);
 
-  res.status(500).json({
-    success: false,
-    error: error.message || "Internal server error."
-  });
-});
+// ===============================
+// START SERVER
+// ===============================
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("=================================");
-  console.log("ResumeAI Backend Started");
-  console.log("Port: " + PORT);
-  console.log("API: /api/analyze");
-  console.log("Health: /api/health");
-  console.log("=================================");
-});
+app.listen(
+  PORT,
+  "0.0.0.0",
+  () => {
+    console.log(
+      "================================="
+    );
+
+    console.log(
+      "ResumeAI Backend Started"
+    );
+
+    console.log(
+      "Port: " + PORT
+    );
+
+    console.log(
+      "API: /api/analyze"
+    );
+
+    console.log(
+      "Health: /api/health"
+    );
+
+    console.log(
+      "================================="
+    );
+  }
+);
