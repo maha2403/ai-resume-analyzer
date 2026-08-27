@@ -56,52 +56,66 @@ function App() {
     try {
       const formData = new FormData();
 
+      // Backend expects "resume"
       formData.append("resume", file);
+
+      // Optional job description
       formData.append(
         "jobDescription",
         jobDescription.trim()
       );
 
-      console.log("Sending resume to:", API_URL);
+      console.log("=================================");
+      console.log("Resume Analysis Started");
+      console.log("API URL:", API_URL);
       console.log("File:", file.name);
+      console.log("File Type:", file.type);
+      console.log("File Size:", file.size);
+      console.log("=================================");
 
       const response = await fetch(API_URL, {
         method: "POST",
         body: formData,
       });
 
+      console.log("Response Status:", response.status);
+      console.log("Response OK:", response.ok);
+
       const text = await response.text();
+
+      console.log("Raw Backend Response:", text);
 
       let data;
 
       try {
         data = JSON.parse(text);
-      } catch {
+      } catch (parseError) {
+        console.error("JSON Parse Error:", parseError);
+
         throw new Error(
           `Server returned an invalid response (${response.status}).`
         );
       }
 
-      console.log("Backend response:", data);
+      console.log("Parsed Backend Response:", data);
 
       if (!response.ok || data.success === false) {
         throw new Error(
           data.error ||
             data.details ||
+            data.message ||
             "Resume analysis failed."
         );
       }
 
-      setAnalysis({
+      const result = {
         ...data,
 
         skills: Array.isArray(data.skills)
           ? data.skills
           : [],
 
-        sectionsFound: Array.isArray(
-          data.sectionsFound
-        )
+        sectionsFound: Array.isArray(data.sectionsFound)
           ? data.sectionsFound
           : [],
 
@@ -114,7 +128,15 @@ function App() {
         jobMatchScore: Number(
           data.jobMatchScore || 0
         ),
-      });
+
+        fileName:
+          data.fileName ||
+          file.name,
+      };
+
+      console.log("Final Analysis Result:", result);
+
+      setAnalysis(result);
 
       setTimeout(() => {
         document
@@ -125,12 +147,24 @@ function App() {
           });
       }, 300);
     } catch (err) {
+      console.error("=================================");
       console.error("ANALYZE ERROR:", err);
+      console.error("ERROR MESSAGE:", err.message);
+      console.error("=================================");
 
-      setError(
-        err.message ||
-          "Unable to analyze resume. Please try again."
-      );
+      if (
+        err.name === "TypeError" &&
+        err.message.toLowerCase().includes("fetch")
+      ) {
+        setError(
+          "Unable to connect to the analysis server. Please check the backend connection."
+        );
+      } else {
+        setError(
+          err.message ||
+            "Unable to analyze resume. Please try again."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -173,10 +207,7 @@ function App() {
   const status = getStatus();
 
   const skillsMatch = analysis
-    ? Math.min(
-        analysis.skills.length * 10,
-        100
-      )
+    ? Math.min(analysis.skills.length * 10, 100)
     : 0;
 
   const experienceMatch = analysis
@@ -201,6 +232,7 @@ function App() {
       {/* NAVBAR */}
 
       <nav className="navbar">
+
         <div className="logo">
           Resume<span>AI</span>
         </div>
@@ -221,6 +253,7 @@ function App() {
         >
           Get Started
         </button>
+
       </nav>
 
       <main>
@@ -281,6 +314,7 @@ function App() {
                 </div>
 
                 <div>
+
                   <strong>
                     {file.name}
                   </strong>
@@ -288,6 +322,7 @@ function App() {
                   <small>
                     ✓ Resume selected successfully
                   </small>
+
                 </div>
 
               </div>
@@ -348,6 +383,7 @@ function App() {
             <div className="card-header">
 
               <div>
+
                 <span className="card-title">
                   Resume Analysis
                 </span>
@@ -355,6 +391,7 @@ function App() {
                 <small>
                   AI-powered report
                 </small>
+
               </div>
 
               <span className="status">
@@ -368,9 +405,7 @@ function App() {
               <div className="score-circle">
 
                 <strong>
-                  {analysis
-                    ? score
-                    : "--"}
+                  {analysis ? score : "--"}
                 </strong>
 
                 <small>
@@ -382,6 +417,7 @@ function App() {
             </div>
 
             <div className="analysis-item">
+
               <span>
                 ✓ Skills Match
               </span>
@@ -391,9 +427,11 @@ function App() {
                   ? `${skillsMatch}%`
                   : "--"}
               </strong>
+
             </div>
 
             <div className="analysis-item">
+
               <span>
                 ✓ Experience
               </span>
@@ -403,9 +441,11 @@ function App() {
                   ? `${experienceMatch}%`
                   : "--"}
               </strong>
+
             </div>
 
             <div className="analysis-item">
+
               <span>
                 ✓ Keywords
               </span>
@@ -415,6 +455,7 @@ function App() {
                   ? `${keywordMatch}%`
                   : "--"}
               </strong>
+
             </div>
 
           </div>
@@ -644,6 +685,7 @@ function App() {
                       <span>🎯</span>
 
                       <div>
+
                         <h3>
                           ATS Score Breakdown
                         </h3>
@@ -652,6 +694,7 @@ function App() {
                           Your resume's ATS
                           compatibility details.
                         </p>
+
                       </div>
 
                     </div>
@@ -659,6 +702,7 @@ function App() {
                     <div className="progress-item">
 
                       <div>
+
                         <span>
                           Overall ATS Score
                         </span>
@@ -666,14 +710,17 @@ function App() {
                         <strong>
                           {score}%
                         </strong>
+
                       </div>
 
                       <div className="progress-bar">
+
                         <span
                           style={{
                             width: `${score}%`,
                           }}
                         />
+
                       </div>
 
                     </div>
@@ -681,6 +728,7 @@ function App() {
                     <div className="detail-grid">
 
                       <div>
+
                         <span>
                           Skills
                         </span>
@@ -688,9 +736,11 @@ function App() {
                         <strong>
                           {skillsMatch}%
                         </strong>
+
                       </div>
 
                       <div>
+
                         <span>
                           Experience
                         </span>
@@ -698,9 +748,11 @@ function App() {
                         <strong>
                           {experienceMatch}%
                         </strong>
+
                       </div>
 
                       <div>
+
                         <span>
                           Keywords
                         </span>
@@ -708,6 +760,7 @@ function App() {
                         <strong>
                           {keywordMatch}%
                         </strong>
+
                       </div>
 
                     </div>
@@ -716,11 +769,13 @@ function App() {
 
                 {activeCard === "skills" && (
                   <>
+
                     <div className="detail-header">
 
                       <span>🛠️</span>
 
                       <div>
+
                         <h3>
                           Skills Detected
                         </h3>
@@ -729,6 +784,7 @@ function App() {
                           Technical and professional
                           skills found in your resume.
                         </p>
+
                       </div>
 
                     </div>
@@ -750,16 +806,19 @@ function App() {
                       )}
 
                     </div>
+
                   </>
                 )}
 
                 {activeCard === "sections" && (
                   <>
+
                     <div className="detail-header">
 
                       <span>📑</span>
 
                       <div>
+
                         <h3>
                           Resume Sections
                         </h3>
@@ -768,6 +827,7 @@ function App() {
                           Important sections found
                           in your resume.
                         </p>
+
                       </div>
 
                     </div>
@@ -798,16 +858,19 @@ function App() {
                       )}
 
                     </div>
+
                   </>
                 )}
 
                 {activeCard === "job" && (
                   <>
+
                     <div className="detail-header">
 
                       <span>💼</span>
 
                       <div>
+
                         <h3>
                           Job Match Analysis
                         </h3>
@@ -816,6 +879,7 @@ function App() {
                           How closely your resume
                           matches the job description.
                         </p>
+
                       </div>
 
                     </div>
@@ -1018,6 +1082,7 @@ function App() {
         </footer>
 
       </main>
+
     </div>
   );
 }
