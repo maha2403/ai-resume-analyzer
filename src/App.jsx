@@ -13,7 +13,7 @@ function App() {
   const [error, setError] = useState("");
 
   // ===============================
-  // FILE CHANGE
+  // FILE UPLOAD
   // ===============================
 
   const handleFileChange = (e) => {
@@ -23,31 +23,19 @@ function App() {
       return;
     }
 
-    const allowedTypes = [
-      "application/pdf",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/msword",
-    ];
+    const fileName = selectedFile.name.toLowerCase();
 
-    const isValidExtension = /\.(pdf|doc|docx)$/i.test(
-      selectedFile.name
-    );
-
-    if (
-      !allowedTypes.includes(selectedFile.type) &&
-      !isValidExtension
-    ) {
-      setError(
-        "Please upload a PDF or DOC/DOCX resume."
-      );
+    // Mobile-friendly PDF validation
+    if (!fileName.endsWith(".pdf")) {
+      setError("Please upload a PDF resume.");
       setFile(null);
       return;
     }
 
-    // Backend currently supports PDF only
-    if (!/\.pdf$/i.test(selectedFile.name)) {
+    // 5 MB limit
+    if (selectedFile.size > 5 * 1024 * 1024) {
       setError(
-        "Please upload a PDF resume. DOC/DOCX analysis is not supported by the backend yet."
+        "File is too large. Maximum size is 5 MB."
       );
       setFile(null);
       return;
@@ -77,7 +65,7 @@ function App() {
     try {
       const formData = new FormData();
 
-      // IMPORTANT:
+      // IMPORTANT
       // Backend expects "resume"
       formData.append("resume", file);
 
@@ -141,8 +129,7 @@ function App() {
         ...data,
 
         fileName:
-          data.fileName ||
-          file.name,
+          data.fileName || file.name,
 
         score: Number(
           data.score || 0
@@ -179,9 +166,7 @@ function App() {
       // Scroll to results
       setTimeout(() => {
         const results =
-          document.getElementById(
-            "results"
-          );
+          document.getElementById("results");
 
         if (results) {
           results.scrollIntoView({
@@ -215,10 +200,7 @@ function App() {
         "================================"
       );
 
-      // More useful error message
-      if (
-        err?.name === "TypeError"
-      ) {
+      if (err?.name === "TypeError") {
         setError(
           "Unable to connect to the backend. Please check your internet connection and try again."
         );
@@ -310,8 +292,7 @@ function App() {
       : 50
     : 0;
 
-  const keywordMatch =
-    skillsMatch;
+  const keywordMatch = skillsMatch;
 
   // ===============================
   // UI
@@ -320,9 +301,7 @@ function App() {
   return (
     <div className="app">
 
-      {/* =========================
-          NAVBAR
-      ========================== */}
+      {/* NAVBAR */}
 
       <nav className="navbar">
 
@@ -361,9 +340,7 @@ function App() {
 
       <main>
 
-        {/* =========================
-            HERO
-        ========================== */}
+        {/* HERO */}
 
         <section
           id="home"
@@ -398,7 +375,7 @@ function App() {
               <input
                 type="file"
                 id="resume-upload"
-                accept=".pdf"
+                accept="application/pdf,.pdf"
                 onChange={
                   handleFileChange
                 }
@@ -413,7 +390,7 @@ function App() {
               </label>
 
               <span className="upload-hint">
-                PDF only
+                PDF only • Maximum 5 MB
               </span>
 
             </div>
@@ -482,7 +459,7 @@ function App() {
               </div>
             )}
 
-            {/* ANALYZE */}
+            {/* ANALYZE BUTTON */}
 
             {file && (
               <button
@@ -505,9 +482,7 @@ function App() {
 
           </div>
 
-          {/* =========================
-              PREVIEW CARD
-          ========================== */}
+          {/* PREVIEW CARD */}
 
           <div className="hero-card">
 
@@ -595,9 +570,7 @@ function App() {
 
         </section>
 
-        {/* =========================
-            RESULTS
-        ========================== */}
+        {/* RESULTS */}
 
         {analysis && (
           <section
@@ -831,14 +804,12 @@ function App() {
 
             </div>
 
-            {/* =====================
-                DETAILS
-            ====================== */}
+            {/* DETAILS */}
 
             {activeCard && (
               <div className="detail-panel">
 
-                {/* ATS DETAILS */}
+                {/* ATS */}
 
                 {activeCard === "ats" && (
                   <>
@@ -935,7 +906,7 @@ function App() {
                   </>
                 )}
 
-                {/* SKILLS DETAILS */}
+                {/* SKILLS */}
 
                 {activeCard ===
                   "skills" && (
@@ -992,7 +963,7 @@ function App() {
                   </>
                 )}
 
-                {/* SECTION DETAILS */}
+                {/* SECTIONS */}
 
                 {activeCard ===
                   "sections" && (
@@ -1067,7 +1038,7 @@ function App() {
                   </>
                 )}
 
-                {/* JOB DETAILS */}
+                {/* JOB */}
 
                 {activeCard ===
                   "job" && (
@@ -1138,9 +1109,7 @@ function App() {
               </div>
             )}
 
-            {/* =====================
-                SUGGESTIONS
-            ====================== */}
+            {/* SUGGESTIONS */}
 
             <div className="suggestions">
 
@@ -1205,9 +1174,7 @@ function App() {
           </section>
         )}
 
-        {/* =========================
-            FEATURES
-        ========================== */}
+        {/* FEATURES */}
 
         <section
           id="features"
@@ -1292,9 +1259,7 @@ function App() {
 
         </section>
 
-        {/* =========================
-            FOOTER
-        ========================== */}
+        {/* FOOTER */}
 
         <footer className="footer">
 
