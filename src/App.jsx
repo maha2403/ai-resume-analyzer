@@ -27,45 +27,40 @@ function App() {
   const handleFileChange = (e) => {
     const selectedFile = e.target.files?.[0];
 
+    setError("");
+    setAnalysis(null);
+    setActiveCard(null);
+
     if (!selectedFile) {
+      setFile(null);
       return;
     }
 
     const fileName = selectedFile.name.toLowerCase();
 
-    const isValidFile =
-      fileName.endsWith(".pdf") ||
-      fileName.endsWith(".doc") ||
-      fileName.endsWith(".docx");
-
-    if (!isValidFile) {
-      setError("Please upload a PDF or DOC/DOCX resume.");
-      setFile(null);
-      setAnalysis(null);
-      return;
-    }
-
-    // Backend currently supports PDF analysis.
+    // Backend currently supports PDF
     if (!fileName.endsWith(".pdf")) {
-      setError(
-        "Currently, ResumeAI analysis supports PDF resumes only. Please upload a PDF."
-      );
       setFile(null);
-      setAnalysis(null);
+
+      setError(
+        "Please upload a PDF resume. DOC/DOCX analysis is currently not supported."
+      );
+
       return;
     }
 
+    // Maximum 5 MB
     if (selectedFile.size > 5 * 1024 * 1024) {
-      setError("File is too large. Maximum size is 5 MB.");
       setFile(null);
-      setAnalysis(null);
+
+      setError(
+        "File is too large. Maximum size is 5 MB."
+      );
+
       return;
     }
 
     setFile(selectedFile);
-    setAnalysis(null);
-    setActiveCard(null);
-    setError("");
 
     console.log("=================================");
     console.log("FILE SELECTED");
@@ -95,19 +90,19 @@ function App() {
       console.log("RESUME ANALYSIS STARTED");
       console.log("=================================");
 
-      console.log("API URL:", API_URL);
+      console.log("Backend:", API_URL);
       console.log("File:", file.name);
       console.log("File type:", file.type);
       console.log("File size:", file.size);
 
-      // -----------------------------------------------
-      // FORM DATA
-      // -----------------------------------------------
+      // -------------------------------------------------
+      // CREATE FORM DATA
+      // -------------------------------------------------
 
       const formData = new FormData();
 
       // IMPORTANT:
-      // Backend uses upload.single("resume")
+      // Backend has upload.single("resume")
       formData.append("resume", file);
 
       formData.append(
@@ -115,27 +110,38 @@ function App() {
         jobDescription.trim()
       );
 
-      console.log("Sending request to backend...");
+      console.log("FormData created");
+      console.log("Sending request...");
 
-      // -----------------------------------------------
-      // FETCH
-      // -----------------------------------------------
+      // -------------------------------------------------
+      // SEND REQUEST
+      // -------------------------------------------------
 
       const response = await fetch(API_URL, {
         method: "POST",
         body: formData,
       });
 
-      console.log("Response status:", response.status);
-      console.log("Response OK:", response.ok);
+      console.log(
+        "Backend response status:",
+        response.status
+      );
 
-      // -----------------------------------------------
-      // RESPONSE TEXT
-      // -----------------------------------------------
+      console.log(
+        "Backend response OK:",
+        response.ok
+      );
+
+      // -------------------------------------------------
+      // READ RESPONSE
+      // -------------------------------------------------
 
       const text = await response.text();
 
-      console.log("Backend raw response:", text);
+      console.log(
+        "Backend raw response:",
+        text
+      );
 
       if (!text) {
         throw new Error(
@@ -143,9 +149,9 @@ function App() {
         );
       }
 
-      // -----------------------------------------------
-      // JSON
-      // -----------------------------------------------
+      // -------------------------------------------------
+      // PARSE JSON
+      // -------------------------------------------------
 
       let data;
 
@@ -162,11 +168,14 @@ function App() {
         );
       }
 
-      console.log("Backend JSON:", data);
+      console.log(
+        "Backend JSON:",
+        data
+      );
 
-      // -----------------------------------------------
+      // -------------------------------------------------
       // BACKEND ERROR
-      // -----------------------------------------------
+      // -------------------------------------------------
 
       if (!response.ok) {
         throw new Error(
@@ -176,60 +185,66 @@ function App() {
         );
       }
 
-      if (data.success === false) {
+      if (data?.success === false) {
         throw new Error(
-          data.error ||
-            data.details ||
+          data?.error ||
+            data?.details ||
             "Resume analysis failed."
         );
       }
 
-      // -----------------------------------------------
-      // NORMALIZE DATA
-      // -----------------------------------------------
+      // -------------------------------------------------
+      // NORMALIZE RESULT
+      // -------------------------------------------------
 
       const result = {
         ...data,
 
         fileName:
-          data.fileName ||
+          data?.fileName ||
           file.name,
 
-        score: Number(data.score || 0),
-
-        skills: Array.isArray(data.skills)
-          ? data.skills
-          : [],
-
-        sectionsFound: Array.isArray(
-          data.sectionsFound
-        )
-          ? data.sectionsFound
-          : [],
-
-        suggestions: Array.isArray(
-          data.suggestions
-        )
-          ? data.suggestions
-          : [],
-
-        jobMatchScore: Number(
-          data.jobMatchScore || 0
+        score: Number(
+          data?.score || 0
         ),
+
+        skills:
+          Array.isArray(data?.skills)
+            ? data.skills
+            : [],
+
+        sectionsFound:
+          Array.isArray(
+            data?.sectionsFound
+          )
+            ? data.sectionsFound
+            : [],
+
+        suggestions:
+          Array.isArray(
+            data?.suggestions
+          )
+            ? data.suggestions
+            : [],
+
+        jobMatchScore:
+          Number(
+            data?.jobMatchScore || 0
+          ),
       };
 
-      // -----------------------------------------------
-      // SUCCESS
-      // -----------------------------------------------
-
       console.log("=================================");
-      console.log("ANALYSIS SUCCESSFUL");
+      console.log("ANALYSIS SUCCESS");
       console.log(result);
       console.log("=================================");
 
+      // -------------------------------------------------
+      // SHOW RESULT
+      // -------------------------------------------------
+
       setAnalysis(result);
 
-      // Scroll to results
+      // Scroll to result
       setTimeout(() => {
         document
           .getElementById("results")
@@ -238,29 +253,30 @@ function App() {
             block: "start",
           });
       }, 300);
+
     } catch (err) {
       console.error("=================================");
-      console.error("ANALYZE ERROR");
+      console.error("ANALYSIS ERROR");
       console.error(err);
       console.error("=================================");
 
-      let message =
-        "Unable to analyze resume. Please try again.";
-
-      // Network / CORS / connection error
+      // Network error
       if (
         err instanceof TypeError &&
         err.message
-          .toLowerCase()
+          ?.toLowerCase()
           .includes("fetch")
       ) {
-        message =
-          "Unable to connect to the backend. Please check the Railway backend URL and CORS settings.";
-      } else if (err?.message) {
-        message = err.message;
+        setError(
+          "Unable to connect to the backend. Please check the Railway backend server."
+        );
+      } else {
+        setError(
+          err?.message ||
+            "Unable to analyze resume."
+        );
       }
 
-      setError(message);
     } finally {
       setLoading(false);
     }
@@ -366,9 +382,7 @@ function App() {
   return (
     <div className="app">
 
-      {/* =================================================
-          NAVBAR
-      ================================================= */}
+      {/* NAVBAR */}
 
       <nav className="navbar">
 
@@ -408,9 +422,7 @@ function App() {
 
       <main>
 
-        {/* =================================================
-            HERO
-        ================================================= */}
+        {/* HERO */}
 
         <section
           id="home"
@@ -437,16 +449,14 @@ function App() {
               compatibility in seconds.
             </p>
 
-            {/* ===========================================
-                UPLOAD
-            =========================================== */}
+            {/* UPLOAD */}
 
             <div className="upload-area">
 
               <input
                 type="file"
                 id="resume-upload"
-                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept="application/pdf,.pdf"
                 onChange={handleFileChange}
                 hidden
               />
@@ -459,14 +469,12 @@ function App() {
               </label>
 
               <span className="upload-hint">
-                PDF, DOC or DOCX
+                PDF only • Maximum 5 MB
               </span>
 
             </div>
 
-            {/* ===========================================
-                SELECTED FILE
-            =========================================== */}
+            {/* SELECTED FILE */}
 
             {file && (
               <div className="selected-file">
@@ -488,9 +496,7 @@ function App() {
               </div>
             )}
 
-            {/* ===========================================
-                JOB DESCRIPTION
-            =========================================== */}
+            {/* JOB DESCRIPTION */}
 
             <div className="job-description-box">
 
@@ -517,9 +523,7 @@ function App() {
 
             </div>
 
-            {/* ===========================================
-                ERROR
-            =========================================== */}
+            {/* ERROR */}
 
             {error && (
               <div className="error-message">
@@ -527,9 +531,7 @@ function App() {
               </div>
             )}
 
-            {/* ===========================================
-                ANALYZE BUTTON
-            =========================================== */}
+            {/* ANALYZE BUTTON */}
 
             {file && (
               <button
@@ -551,9 +553,7 @@ function App() {
 
           </div>
 
-          {/* =================================================
-              PREVIEW CARD
-          ================================================= */}
+          {/* PREVIEW CARD */}
 
           <div className="hero-card">
 
@@ -633,9 +633,7 @@ function App() {
 
         </section>
 
-        {/* =================================================
-            RESULTS
-        ================================================= */}
+        {/* RESULTS */}
 
         {analysis && (
           <section
@@ -662,9 +660,7 @@ function App() {
 
             </div>
 
-            {/* =============================================
-                STATUS
-            ============================================= */}
+            {/* STATUS */}
 
             <div className="score-status">
 
@@ -684,9 +680,7 @@ function App() {
 
             </div>
 
-            {/* =============================================
-                RESULT CARDS
-            ============================================= */}
+            {/* RESULT GRID */}
 
             <div className="result-grid">
 
@@ -844,9 +838,7 @@ function App() {
 
             </div>
 
-            {/* =================================================
-                DETAIL PANEL
-            ================================================= */}
+            {/* DETAIL PANEL */}
 
             {activeCard && (
               <div className="detail-panel">
@@ -931,6 +923,7 @@ function App() {
                       </div>
 
                     </div>
+
                   </>
                 )}
 
@@ -1104,9 +1097,7 @@ function App() {
               </div>
             )}
 
-            {/* =================================================
-                SUGGESTIONS
-            ================================================= */}
+            {/* SUGGESTIONS */}
 
             <div className="suggestions">
 
@@ -1166,9 +1157,7 @@ function App() {
           </section>
         )}
 
-        {/* =================================================
-            FEATURES
-        ================================================= */}
+        {/* FEATURES */}
 
         <section
           id="features"
@@ -1251,9 +1240,7 @@ function App() {
 
         </section>
 
-        {/* =================================================
-            FOOTER
-        ================================================= */}
+        {/* FOOTER */}
 
         <footer className="footer">
 
