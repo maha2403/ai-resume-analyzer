@@ -4,8 +4,11 @@ const multer = require("multer");
 const { PDFParse } = require("pdf-parse");
 
 const app = express();
-
 const PORT = process.env.PORT || 5000;
+
+// ===============================
+// MIDDLEWARE
+// ===============================
 
 app.use(
   cors({
@@ -17,12 +20,20 @@ app.use(
 
 app.use(express.json());
 
+// ===============================
+// FILE UPLOAD
+// ===============================
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024,
   },
 });
+
+// ===============================
+// SKILLS
+// ===============================
 
 const skillsList = [
   "JavaScript",
@@ -64,6 +75,10 @@ const skillsList = [
   "Linux",
 ];
 
+// ===============================
+// RESUME SECTIONS
+// ===============================
+
 const sectionNames = [
   "summary",
   "objective",
@@ -84,44 +99,75 @@ const sectionNames = [
   "contact",
   "profile",
   "languages",
+  "linkedin",
+  "github",
 ];
+
+// ===============================
+// FIND SKILLS
+// ===============================
 
 function findSkills(text) {
   const lowerText = text.toLowerCase();
 
-  return [
-    ...new Set(
-      skillsList.filter((skill) =>
-        lowerText.includes(skill.toLowerCase())
-      )
-    ),
-  ];
+  const foundSkills = [];
+
+  for (const skill of skillsList) {
+    if (lowerText.includes(skill.toLowerCase())) {
+      foundSkills.push(skill);
+    }
+  }
+
+  return [...new Set(foundSkills)];
 }
+
+// ===============================
+// FIND SECTIONS
+// ===============================
 
 function findSections(text) {
   const lowerText = text.toLowerCase();
 
-  return [
-    ...new Set(
-      sectionNames.filter((section) =>
-        lowerText.includes(section.toLowerCase())
-      )
-    ),
-  ];
+  const foundSections = [];
+
+  for (const section of sectionNames) {
+    if (lowerText.includes(section.toLowerCase())) {
+      foundSections.push(section);
+    }
+  }
+
+  return [...new Set(foundSections)];
 }
+
+// ===============================
+// ATS SCORE
+// ===============================
 
 function calculateATS(text, skills, sections) {
   let score = 25;
 
   score += Math.min(skills.length * 3, 30);
+
   score += Math.min(sections.length * 4, 28);
 
-  if (text.length > 1000) score += 5;
-  if (text.length > 2000) score += 5;
-  if (text.length > 3000) score += 5;
+  if (text.length > 1000) {
+    score += 5;
+  }
+
+  if (text.length > 2000) {
+    score += 5;
+  }
+
+  if (text.length > 3000) {
+    score += 5;
+  }
 
   return Math.min(score, 100);
 }
+
+// ===============================
+// JOB MATCH
+// ===============================
 
 function calculateJobMatch(resumeText, jobDescription) {
   if (!jobDescription || !jobDescription.trim()) {
@@ -166,12 +212,17 @@ function calculateJobMatch(resumeText, jobDescription) {
   );
 }
 
+// ===============================
+// SUGGESTIONS
+// ===============================
+
 function generateSuggestions(
   text,
   skills,
   jobDescription
 ) {
   const suggestions = [];
+
   const lowerText = text.toLowerCase();
 
   if (
@@ -231,7 +282,10 @@ function generateSuggestions(
     );
   }
 
-  if (jobDescription && jobDescription.trim()) {
+  if (
+    jobDescription &&
+    jobDescription.trim()
+  ) {
     suggestions.push(
       "Customize your resume with keywords from the job description."
     );
@@ -240,7 +294,9 @@ function generateSuggestions(
   return [...new Set(suggestions)].slice(0, 7);
 }
 
-/* HOME */
+// ===============================
+// HOME
+// ===============================
 
 app.get("/", (req, res) => {
   res.json({
@@ -250,7 +306,9 @@ app.get("/", (req, res) => {
   });
 });
 
-/* HEALTH */
+// ===============================
+// HEALTH CHECK
+// ===============================
 
 app.get("/api/health", (req, res) => {
   res.json({
@@ -260,7 +318,9 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-/* ANALYZE */
+// ===============================
+// ANALYZE RESUME
+// ===============================
 
 app.post(
   "/api/analyze",
@@ -270,46 +330,48 @@ app.post(
 
     try {
       console.log("=================================");
-      console.log("ANALYZE REQUEST RECEIVED");
+      console.log("Resume analysis request received");
+      console.log("=================================");
+
+      // --------------------------------
+      // CHECK FILE
+      // --------------------------------
 
       if (!req.file) {
-        console.log("NO FILE RECEIVED");
-
-        return res.status(400).json({
-          success: false,
-          error: "No resume file received.",
-        });
-      }
-
-      console.log("File:", req.file.originalname);
-      console.log("Mimetype:", req.file.mimetype);
-      console.log("Size:", req.file.size);
-
-      /*
-       * IMPORTANT:
-       * Mobile browsers may sometimes send
-       * application/octet-stream instead of
-       * application/pdf.
-       *
-       * So we check both MIME type AND extension.
-       */
-
-      const fileName =
-        req.file.originalname || "";
-
-      const isPDF =
-        req.file.mimetype === "application/pdf" ||
-        fileName.toLowerCase().endsWith(".pdf");
-
-      if (!isPDF) {
         return res.status(400).json({
           success: false,
           error: "Please upload a PDF resume.",
         });
       }
 
+      console.log("File:", req.file.originalname);
+      console.log("MIME:", req.file.mimetype);
+      console.log("Size:", req.file.size);
+
+      // --------------------------------
+      // FILE TYPE CHECK
+      // --------------------------------
+
+      const fileName =
+        req.file.originalname.toLowerCase();
+
+      if (!fileName.endsWith(".pdf")) {
+        return res.status(400).json({
+          success: false,
+          error: "Only PDF resumes are supported.",
+        });
+      }
+
+      // --------------------------------
+      // JOB DESCRIPTION
+      // --------------------------------
+
       const jobDescription =
         req.body?.jobDescription || "";
+
+      // --------------------------------
+      // PDF PARSER
+      // --------------------------------
 
       console.log("Reading PDF...");
 
@@ -327,6 +389,10 @@ app.post(
         resumeText.length
       );
 
+      // --------------------------------
+      // EMPTY PDF CHECK
+      // --------------------------------
+
       if (!resumeText.trim()) {
         return res.status(400).json({
           success: false,
@@ -334,6 +400,10 @@ app.post(
             "No readable text found in this PDF. Please upload a text-based PDF.",
         });
       }
+
+      // --------------------------------
+      // ANALYSIS
+      // --------------------------------
 
       const skills =
         findSkills(resumeText);
@@ -361,16 +431,11 @@ app.post(
           jobDescription
         );
 
-      console.log("Analysis successful");
-      console.log("Score:", score);
-      console.log("Skills:", skills.length);
-      console.log("Sections:", sectionsFound.length);
-      console.log(
-        "Job Match:",
-        jobMatchScore
-      );
+      // --------------------------------
+      // RESPONSE
+      // --------------------------------
 
-      return res.json({
+      const result = {
         success: true,
 
         fileName:
@@ -385,7 +450,15 @@ app.post(
         jobMatchScore,
 
         suggestions,
-      });
+      };
+
+      console.log(
+        "Analysis successful:",
+        result
+      );
+
+      return res.json(result);
+
     } catch (error) {
       console.error(
         "================================="
@@ -396,6 +469,10 @@ app.post(
         error
       );
 
+      console.error(
+        "================================="
+      );
+
       return res.status(500).json({
         success: false,
         error:
@@ -404,7 +481,12 @@ app.post(
           error?.message ||
           "Unknown server error.",
       });
+
     } finally {
+      // --------------------------------
+      // CLEAN PDF PARSER
+      // --------------------------------
+
       if (parser) {
         try {
           await parser.destroy();
@@ -419,7 +501,9 @@ app.post(
   }
 );
 
-/* MULTER / SERVER ERROR */
+// ===============================
+// MULTER / SERVER ERROR HANDLER
+// ===============================
 
 app.use(
   (error, req, res, next) => {
@@ -441,6 +525,12 @@ app.use(
             "File is too large. Maximum size is 5 MB.",
         });
       }
+
+      return res.status(400).json({
+        success: false,
+        error:
+          "File upload failed.",
+      });
     }
 
     return res.status(500).json({
@@ -452,7 +542,9 @@ app.use(
   }
 );
 
-/* START SERVER */
+// ===============================
+// START SERVER
+// ===============================
 
 app.listen(
   PORT,
@@ -461,19 +553,23 @@ app.listen(
     console.log(
       "================================="
     );
+
     console.log(
       "ResumeAI Backend Started"
     );
+
     console.log(
-      "Port:",
-      PORT
+      "Port: " + PORT
     );
+
     console.log(
       "API: /api/analyze"
     );
+
     console.log(
       "Health: /api/health"
     );
+
     console.log(
       "================================="
     );
