@@ -12,10 +12,16 @@ function App() {
   const [activeCard, setActiveCard] = useState(null);
   const [error, setError] = useState("");
 
+  // ===============================
+  // FILE CHANGE
+  // ===============================
+
   const handleFileChange = (e) => {
     const selectedFile = e.target.files?.[0];
 
-    if (!selectedFile) return;
+    if (!selectedFile) {
+      return;
+    }
 
     const allowedTypes = [
       "application/pdf",
@@ -31,7 +37,18 @@ function App() {
       !allowedTypes.includes(selectedFile.type) &&
       !isValidExtension
     ) {
-      setError("Please upload a PDF or DOC/DOCX resume.");
+      setError(
+        "Please upload a PDF or DOC/DOCX resume."
+      );
+      setFile(null);
+      return;
+    }
+
+    // Backend currently supports PDF only
+    if (!/\.pdf$/i.test(selectedFile.name)) {
+      setError(
+        "Please upload a PDF resume. DOC/DOCX analysis is not supported by the backend yet."
+      );
       setFile(null);
       return;
     }
@@ -41,6 +58,10 @@ function App() {
     setActiveCard(null);
     setError("");
   };
+
+  // ===============================
+  // ANALYZE RESUME
+  // ===============================
 
   const handleAnalyze = async () => {
     if (!file) {
@@ -56,6 +77,7 @@ function App() {
     try {
       const formData = new FormData();
 
+      // IMPORTANT:
       // Backend expects "resume"
       formData.append("resume", file);
 
@@ -65,39 +87,42 @@ function App() {
         jobDescription.trim()
       );
 
-      console.log("=================================");
-      console.log("Resume Analysis Started");
-      console.log("API URL:", API_URL);
+      console.log("================================");
+      console.log("ResumeAI Analysis Started");
+      console.log("API:", API_URL);
       console.log("File:", file.name);
-      console.log("File Type:", file.type);
-      console.log("File Size:", file.size);
-      console.log("=================================");
+      console.log("Type:", file.type);
+      console.log("Size:", file.size);
+      console.log("================================");
 
       const response = await fetch(API_URL, {
         method: "POST",
         body: formData,
       });
 
-      console.log("Response Status:", response.status);
-      console.log("Response OK:", response.ok);
+      console.log(
+        "Response status:",
+        response.status
+      );
 
-      const text = await response.text();
+      const responseText = await response.text();
 
-      console.log("Raw Backend Response:", text);
+      console.log(
+        "Backend response:",
+        responseText
+      );
 
       let data;
 
       try {
-        data = JSON.parse(text);
-      } catch (parseError) {
-        console.error("JSON Parse Error:", parseError);
-
+        data = JSON.parse(responseText);
+      } catch {
         throw new Error(
           `Server returned an invalid response (${response.status}).`
         );
       }
 
-      console.log("Parsed Backend Response:", data);
+      console.log("Parsed data:", data);
 
       if (!response.ok || data.success === false) {
         throw new Error(
@@ -108,76 +133,125 @@ function App() {
         );
       }
 
+      // ===============================
+      // NORMALIZE RESPONSE
+      // ===============================
+
       const result = {
         ...data,
 
-        skills: Array.isArray(data.skills)
-          ? data.skills
-          : [],
+        fileName:
+          data.fileName ||
+          file.name,
 
-        sectionsFound: Array.isArray(data.sectionsFound)
-          ? data.sectionsFound
-          : [],
-
-        suggestions: Array.isArray(data.suggestions)
-          ? data.suggestions
-          : [],
-
-        score: Number(data.score || 0),
+        score: Number(
+          data.score || 0
+        ),
 
         jobMatchScore: Number(
           data.jobMatchScore || 0
         ),
 
-        fileName:
-          data.fileName ||
-          file.name,
+        skills: Array.isArray(data.skills)
+          ? data.skills
+          : [],
+
+        sectionsFound: Array.isArray(
+          data.sectionsFound
+        )
+          ? data.sectionsFound
+          : [],
+
+        suggestions: Array.isArray(
+          data.suggestions
+        )
+          ? data.suggestions
+          : [],
       };
 
-      console.log("Final Analysis Result:", result);
+      console.log(
+        "Analysis successful:",
+        result
+      );
 
       setAnalysis(result);
 
+      // Scroll to results
       setTimeout(() => {
-        document
-          .getElementById("results")
-          ?.scrollIntoView({
+        const results =
+          document.getElementById(
+            "results"
+          );
+
+        if (results) {
+          results.scrollIntoView({
             behavior: "smooth",
             block: "start",
           });
+        }
       }, 300);
-    } catch (err) {
-      console.error("=================================");
-      console.error("ANALYZE ERROR:", err);
-      console.error("ERROR MESSAGE:", err.message);
-      console.error("=================================");
 
+    } catch (err) {
+      console.error(
+        "================================"
+      );
+
+      console.error(
+        "ANALYZE ERROR:",
+        err
+      );
+
+      console.error(
+        "ERROR NAME:",
+        err?.name
+      );
+
+      console.error(
+        "ERROR MESSAGE:",
+        err?.message
+      );
+
+      console.error(
+        "================================"
+      );
+
+      // More useful error message
       if (
-        err.name === "TypeError" &&
-        err.message.toLowerCase().includes("fetch")
+        err?.name === "TypeError"
       ) {
         setError(
-          "Unable to connect to the analysis server. Please check the backend connection."
+          "Unable to connect to the backend. Please check your internet connection and try again."
         );
       } else {
         setError(
-          err.message ||
+          err?.message ||
             "Unable to analyze resume. Please try again."
         );
       }
+
     } finally {
       setLoading(false);
     }
   };
 
-  const score = analysis?.score || 0;
+  // ===============================
+  // SCORE
+  // ===============================
+
+  const score =
+    analysis?.score || 0;
+
+  // ===============================
+  // STATUS
+  // ===============================
 
   const getStatus = () => {
     if (score >= 86) {
       return {
         icon: "🏆",
         title: "Excellent Resume",
-        text: "Your resume is highly ATS-friendly.",
+        text:
+          "Your resume is highly ATS-friendly.",
       };
     }
 
@@ -185,7 +259,8 @@ function App() {
       return {
         icon: "🟢",
         title: "Good Resume",
-        text: "Your resume is strong, but there is still room for improvement.",
+        text:
+          "Your resume is strong, but there is still room for improvement.",
       };
     }
 
@@ -193,43 +268,61 @@ function App() {
       return {
         icon: "🟡",
         title: "Average Resume",
-        text: "Add more relevant skills, keywords and achievements.",
+        text:
+          "Add more relevant skills, keywords and achievements.",
       };
     }
 
     return {
       icon: "🔴",
       title: "Needs Improvement",
-      text: "Your resume needs significant improvements.",
+      text:
+        "Your resume needs significant improvements.",
     };
   };
 
   const status = getStatus();
 
+  // ===============================
+  // MATCH SCORES
+  // ===============================
+
   const skillsMatch = analysis
-    ? Math.min(analysis.skills.length * 10, 100)
+    ? Math.min(
+        analysis.skills.length * 10,
+        100
+      )
     : 0;
 
   const experienceMatch = analysis
     ? analysis.sectionsFound.some(
-        (section) =>
-          section
-            .toLowerCase()
-            .includes("experience") ||
-          section
-            .toLowerCase()
-            .includes("employment")
+        (section) => {
+          const value =
+            String(section).toLowerCase();
+
+          return (
+            value.includes("experience") ||
+            value.includes("employment")
+          );
+        }
       )
       ? 100
       : 50
     : 0;
 
-  const keywordMatch = skillsMatch;
+  const keywordMatch =
+    skillsMatch;
+
+  // ===============================
+  // UI
+  // ===============================
 
   return (
     <div className="app">
 
-      {/* NAVBAR */}
+      {/* =========================
+          NAVBAR
+      ========================== */}
 
       <nav className="navbar">
 
@@ -238,16 +331,26 @@ function App() {
         </div>
 
         <div className="nav-links">
-          <a href="#home">Home</a>
-          <a href="#features">Features</a>
-          <a href="#results">Results</a>
+          <a href="#home">
+            Home
+          </a>
+
+          <a href="#features">
+            Features
+          </a>
+
+          <a href="#results">
+            Results
+          </a>
         </div>
 
         <button
           className="nav-btn"
           onClick={() =>
             document
-              .getElementById("resume-upload")
+              .getElementById(
+                "resume-upload"
+              )
               ?.click()
           }
         >
@@ -258,7 +361,9 @@ function App() {
 
       <main>
 
-        {/* HERO */}
+        {/* =========================
+            HERO
+        ========================== */}
 
         <section
           id="home"
@@ -273,23 +378,30 @@ function App() {
 
             <h1>
               Build a Resume That
-              <span> Gets Noticed.</span>
+              <span>
+                {" "}Gets Noticed.
+              </span>
             </h1>
 
             <p>
-              Upload your resume and let ResumeAI
-              analyze your ATS score, skills,
-              resume sections and job compatibility
-              in seconds.
+              Upload your resume and let
+              ResumeAI analyze your ATS
+              score, skills, resume sections
+              and job compatibility in
+              seconds.
             </p>
+
+            {/* UPLOAD */}
 
             <div className="upload-area">
 
               <input
                 type="file"
                 id="resume-upload"
-                accept=".pdf,.doc,.docx"
-                onChange={handleFileChange}
+                accept=".pdf"
+                onChange={
+                  handleFileChange
+                }
                 hidden
               />
 
@@ -301,10 +413,12 @@ function App() {
               </label>
 
               <span className="upload-hint">
-                PDF, DOC or DOCX
+                PDF only
               </span>
 
             </div>
+
+            {/* SELECTED FILE */}
 
             {file && (
               <div className="selected-file">
@@ -328,28 +442,39 @@ function App() {
               </div>
             )}
 
+            {/* JOB DESCRIPTION */}
+
             <div className="job-description-box">
 
-              <label htmlFor="job-description">
+              <label
+                htmlFor="job-description"
+              >
                 💼 Job Description
               </label>
 
               <textarea
                 id="job-description"
-                value={jobDescription}
+                value={
+                  jobDescription
+                }
                 onChange={(e) =>
-                  setJobDescription(e.target.value)
+                  setJobDescription(
+                    e.target.value
+                  )
                 }
                 placeholder="Paste the job description here..."
                 rows={6}
               />
 
               <small>
-                Optional — add a job description
-                for a more accurate job match.
+                Optional — add a job
+                description for a more
+                accurate job match.
               </small>
 
             </div>
+
+            {/* ERROR */}
 
             {error && (
               <div className="error-message">
@@ -357,10 +482,14 @@ function App() {
               </div>
             )}
 
+            {/* ANALYZE */}
+
             {file && (
               <button
                 className="analyze-btn"
-                onClick={handleAnalyze}
+                onClick={
+                  handleAnalyze
+                }
                 disabled={loading}
               >
                 {loading
@@ -376,7 +505,9 @@ function App() {
 
           </div>
 
-          {/* PREVIEW CARD */}
+          {/* =========================
+              PREVIEW CARD
+          ========================== */}
 
           <div className="hero-card">
 
@@ -405,7 +536,9 @@ function App() {
               <div className="score-circle">
 
                 <strong>
-                  {analysis ? score : "--"}
+                  {analysis
+                    ? score
+                    : "--"}
                 </strong>
 
                 <small>
@@ -462,7 +595,9 @@ function App() {
 
         </section>
 
-        {/* RESULTS */}
+        {/* =========================
+            RESULTS
+        ========================== */}
 
         {analysis && (
           <section
@@ -511,9 +646,11 @@ function App() {
 
             </div>
 
-            {/* RESULT CARDS */}
+            {/* RESULT GRID */}
 
             <div className="result-grid">
+
+              {/* ATS */}
 
               <button
                 className={`result-card ${
@@ -543,7 +680,8 @@ function App() {
                 </strong>
 
                 <p>
-                  Overall resume compatibility.
+                  Overall resume
+                  compatibility.
                 </p>
 
                 <span className="card-action">
@@ -553,6 +691,8 @@ function App() {
                 </span>
 
               </button>
+
+              {/* SKILLS */}
 
               <button
                 className={`result-card ${
@@ -578,11 +718,15 @@ function App() {
                 </h3>
 
                 <strong className="big-score">
-                  {analysis.skills.length}
+                  {
+                    analysis.skills
+                      .length
+                  }
                 </strong>
 
                 <p>
-                  Skills detected in your resume.
+                  Skills detected in
+                  your resume.
                 </p>
 
                 <span className="card-action">
@@ -593,6 +737,8 @@ function App() {
 
               </button>
 
+              {/* SECTIONS */}
+
               <button
                 className={`result-card ${
                   activeCard === "sections"
@@ -601,7 +747,8 @@ function App() {
                 }`}
                 onClick={() =>
                   setActiveCard(
-                    activeCard === "sections"
+                    activeCard ===
+                      "sections"
                       ? null
                       : "sections"
                   )
@@ -617,20 +764,28 @@ function App() {
                 </h3>
 
                 <strong className="big-score">
-                  {analysis.sectionsFound.length}
+                  {
+                    analysis
+                      .sectionsFound
+                      .length
+                  }
                 </strong>
 
                 <p>
-                  Important sections detected.
+                  Important sections
+                  detected.
                 </p>
 
                 <span className="card-action">
-                  {activeCard === "sections"
+                  {activeCard ===
+                  "sections"
                     ? "Hide sections ↑"
                     : "View sections →"}
                 </span>
 
               </button>
+
+              {/* JOB MATCH */}
 
               <button
                 className={`result-card ${
@@ -656,11 +811,14 @@ function App() {
                 </h3>
 
                 <strong className="big-score">
-                  {analysis.jobMatchScore}%
+                  {
+                    analysis.jobMatchScore
+                  }%
                 </strong>
 
                 <p>
-                  Resume and job compatibility.
+                  Resume and job
+                  compatibility.
                 </p>
 
                 <span className="card-action">
@@ -673,16 +831,23 @@ function App() {
 
             </div>
 
-            {/* DETAILS */}
+            {/* =====================
+                DETAILS
+            ====================== */}
 
             {activeCard && (
               <div className="detail-panel">
 
+                {/* ATS DETAILS */}
+
                 {activeCard === "ats" && (
                   <>
+
                     <div className="detail-header">
 
-                      <span>🎯</span>
+                      <span>
+                        🎯
+                      </span>
 
                       <div>
 
@@ -692,7 +857,8 @@ function App() {
 
                         <p>
                           Your resume's ATS
-                          compatibility details.
+                          compatibility
+                          details.
                         </p>
 
                       </div>
@@ -717,7 +883,8 @@ function App() {
 
                         <span
                           style={{
-                            width: `${score}%`,
+                            width:
+                              `${score}%`,
                           }}
                         />
 
@@ -764,15 +931,21 @@ function App() {
                       </div>
 
                     </div>
+
                   </>
                 )}
 
-                {activeCard === "skills" && (
+                {/* SKILLS DETAILS */}
+
+                {activeCard ===
+                  "skills" && (
                   <>
 
                     <div className="detail-header">
 
-                      <span>🛠️</span>
+                      <span>
+                        🛠️
+                      </span>
 
                       <div>
 
@@ -781,8 +954,10 @@ function App() {
                         </h3>
 
                         <p>
-                          Technical and professional
-                          skills found in your resume.
+                          Technical and
+                          professional
+                          skills found in
+                          your resume.
                         </p>
 
                       </div>
@@ -791,17 +966,24 @@ function App() {
 
                     <div className="skill-list">
 
-                      {analysis.skills.length > 0 ? (
+                      {analysis.skills
+                        .length > 0 ? (
                         analysis.skills.map(
-                          (skill, index) => (
-                            <span key={index}>
+                          (
+                            skill,
+                            index
+                          ) => (
+                            <span
+                              key={index}
+                            >
                               ✓ {skill}
                             </span>
                           )
                         )
                       ) : (
                         <p>
-                          No specific skills detected.
+                          No specific
+                          skills detected.
                         </p>
                       )}
 
@@ -810,12 +992,17 @@ function App() {
                   </>
                 )}
 
-                {activeCard === "sections" && (
+                {/* SECTION DETAILS */}
+
+                {activeCard ===
+                  "sections" && (
                   <>
 
                     <div className="detail-header">
 
-                      <span>📑</span>
+                      <span>
+                        📑
+                      </span>
 
                       <div>
 
@@ -824,7 +1011,8 @@ function App() {
                         </h3>
 
                         <p>
-                          Important sections found
+                          Important
+                          sections found
                           in your resume.
                         </p>
 
@@ -834,40 +1022,62 @@ function App() {
 
                     <div className="section-list">
 
-                      {analysis.sectionsFound.map(
-                        (section, index) => (
-                          <div key={index}>
+                      {analysis
+                        .sectionsFound
+                        .map(
+                          (
+                            section,
+                            index
+                          ) => (
+                            <div
+                              key={
+                                index
+                              }
+                            >
 
-                            <span>
-                              ✓
-                            </span>
+                              <span>
+                                ✓
+                              </span>
 
-                            <strong>
-                              {section
-                                .charAt(0)
-                                .toUpperCase() +
-                                section.slice(1)}
-                            </strong>
+                              <strong>
+                                {String(
+                                  section
+                                )
+                                  .charAt(
+                                    0
+                                  )
+                                  .toUpperCase() +
+                                  String(
+                                    section
+                                  ).slice(
+                                    1
+                                  )}
+                              </strong>
 
-                            <small>
-                              Detected
-                            </small>
+                              <small>
+                                Detected
+                              </small>
 
-                          </div>
-                        )
-                      )}
+                            </div>
+                          )
+                        )}
 
                     </div>
 
                   </>
                 )}
 
-                {activeCard === "job" && (
+                {/* JOB DETAILS */}
+
+                {activeCard ===
+                  "job" && (
                   <>
 
                     <div className="detail-header">
 
-                      <span>💼</span>
+                      <span>
+                        💼
+                      </span>
 
                       <div>
 
@@ -876,8 +1086,10 @@ function App() {
                         </h3>
 
                         <p>
-                          How closely your resume
-                          matches the job description.
+                          How closely your
+                          resume matches
+                          the job
+                          description.
                         </p>
 
                       </div>
@@ -887,7 +1099,9 @@ function App() {
                     <div className="job-match-box">
 
                       <strong>
-                        {analysis.jobMatchScore}%
+                        {
+                          analysis.jobMatchScore
+                        }%
                       </strong>
 
                       <span>
@@ -898,7 +1112,8 @@ function App() {
 
                         <span
                           style={{
-                            width: `${analysis.jobMatchScore}%`,
+                            width:
+                              `${analysis.jobMatchScore}%`,
                           }}
                         />
 
@@ -908,9 +1123,12 @@ function App() {
 
                     {!jobDescription.trim() && (
                       <div className="info-box">
-                        💡 Add a job description
-                        before analyzing to get a
-                        meaningful job match score.
+                        💡 Add a job
+                        description
+                        before analyzing
+                        to get a
+                        meaningful job
+                        match score.
                       </div>
                     )}
 
@@ -920,7 +1138,9 @@ function App() {
               </div>
             )}
 
-            {/* SUGGESTIONS */}
+            {/* =====================
+                SUGGESTIONS
+            ====================== */}
 
             <div className="suggestions">
 
@@ -937,7 +1157,8 @@ function App() {
                   </h3>
 
                   <p>
-                    Personalized improvements
+                    Personalized
+                    improvements
                     for your resume.
                   </p>
 
@@ -945,9 +1166,13 @@ function App() {
 
               </div>
 
-              {analysis.suggestions.length > 0 ? (
+              {analysis.suggestions
+                .length > 0 ? (
                 analysis.suggestions.map(
-                  (suggestion, index) => (
+                  (
+                    suggestion,
+                    index
+                  ) => (
                     <div
                       className="suggestion"
                       key={index}
@@ -969,7 +1194,8 @@ function App() {
                     ✓
                   </span>
 
-                  Your resume looks good!
+                  Your resume looks
+                  good!
 
                 </div>
               )}
@@ -979,7 +1205,9 @@ function App() {
           </section>
         )}
 
-        {/* FEATURES */}
+        {/* =========================
+            FEATURES
+        ========================== */}
 
         <section
           id="features"
@@ -998,8 +1226,9 @@ function App() {
           </h2>
 
           <p className="features-subtitle">
-            Get a complete overview of your resume
-            and discover exactly what you can improve.
+            Get a complete overview of
+            your resume and discover
+            exactly what you can improve.
           </p>
 
           <div className="feature-grid">
@@ -1015,8 +1244,9 @@ function App() {
               </h3>
 
               <p>
-                Understand how well your resume
-                performs with Applicant Tracking
+                Understand how well your
+                resume performs with
+                Applicant Tracking
                 Systems.
               </p>
 
@@ -1033,9 +1263,9 @@ function App() {
               </h3>
 
               <p>
-                Analyze your skills, experience,
-                keywords and important resume
-                sections.
+                Analyze your skills,
+                experience, keywords and
+                important resume sections.
               </p>
 
             </div>
@@ -1051,9 +1281,9 @@ function App() {
               </h3>
 
               <p>
-                Compare your resume with a job
-                description and identify relevant
-                skills.
+                Compare your resume with a
+                job description and identify
+                relevant skills.
               </p>
 
             </div>
@@ -1062,7 +1292,9 @@ function App() {
 
         </section>
 
-        {/* FOOTER */}
+        {/* =========================
+            FOOTER
+        ========================== */}
 
         <footer className="footer">
 
@@ -1071,12 +1303,13 @@ function App() {
           </div>
 
           <p>
-            AI-powered resume analysis for smarter
-            job applications.
+            AI-powered resume analysis
+            for smarter job applications.
           </p>
 
           <small>
-            © 2026 ResumeAI. Built with React.
+            © 2026 ResumeAI. Built with
+            React.
           </small>
 
         </footer>
