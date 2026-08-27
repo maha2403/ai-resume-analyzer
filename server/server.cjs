@@ -1,28 +1,39 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const pdfParse = require("pdf-parse");
+const { PDFParse } = require("pdf-parse");
 
 const app = express();
-const PORT = 5000;
 
-// ================================
+const PORT = process.env.PORT || 5000;
+
+// ==========================================
 // MIDDLEWARE
-// ================================
+// ==========================================
 
-app.use(cors());
+app.use(
+  cors({
+    origin: true,
+    methods: ["GET", "POST", "OPTIONS"],
+  })
+);
+
 app.use(express.json());
+
+// ==========================================
+// MULTER
+// ==========================================
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5 MB
+    fileSize: 5 * 1024 * 1024,
   },
 });
 
-// ================================
+// ==========================================
 // SKILLS DATABASE
-// ================================
+// ==========================================
 
 const skillsList = [
   "JavaScript",
@@ -65,11 +76,15 @@ const skillsList = [
   "Flask",
   "Spring Boot",
   "Firebase",
+  "Docker",
+  "Linux",
+  "UI/UX",
+  "WordPress",
 ];
 
-// ================================
+// ==========================================
 // RESUME SECTIONS
-// ================================
+// ==========================================
 
 const sectionNames = [
   "summary",
@@ -90,11 +105,15 @@ const sectionNames = [
   "internship",
   "internships",
   "contact",
+  "profile",
+  "languages",
+  "interests",
+  "references",
 ];
 
-// ================================
+// ==========================================
 // FIND SKILLS
-// ================================
+// ==========================================
 
 function findSkills(text) {
   const lowerText = text.toLowerCase();
@@ -102,7 +121,9 @@ function findSkills(text) {
   const foundSkills = [];
 
   for (const skill of skillsList) {
-    if (lowerText.includes(skill.toLowerCase())) {
+    const skillLower = skill.toLowerCase();
+
+    if (lowerText.includes(skillLower)) {
       foundSkills.push(skill);
     }
   }
@@ -110,9 +131,9 @@ function findSkills(text) {
   return [...new Set(foundSkills)];
 }
 
-// ================================
+// ==========================================
 // FIND SECTIONS
-// ================================
+// ==========================================
 
 function findSections(text) {
   const lowerText = text.toLowerCase();
@@ -128,9 +149,9 @@ function findSections(text) {
   return [...new Set(foundSections)];
 }
 
-// ================================
+// ==========================================
 // ATS SCORE
-// ================================
+// ==========================================
 
 function calculateATS(text, skills, sections) {
   let score = 25;
@@ -157,9 +178,9 @@ function calculateATS(text, skills, sections) {
   return Math.min(score, 100);
 }
 
-// ================================
+// ==========================================
 // JOB MATCH SCORE
-// ================================
+// ==========================================
 
 function calculateJobMatch(resumeText, jobDescription) {
   if (!jobDescription || !jobDescription.trim()) {
@@ -204,9 +225,9 @@ function calculateJobMatch(resumeText, jobDescription) {
   );
 }
 
-// ================================
+// ==========================================
 // SMART SUGGESTIONS
-// ================================
+// ==========================================
 
 function generateSuggestions(
   text,
@@ -218,7 +239,6 @@ function generateSuggestions(
 
   const lowerText = text.toLowerCase();
 
-  // Summary
   if (
     !lowerText.includes("summary") &&
     !lowerText.includes("objective")
@@ -228,7 +248,6 @@ function generateSuggestions(
     );
   }
 
-  // Experience
   if (
     !lowerText.includes("experience") &&
     !lowerText.includes("employment")
@@ -238,21 +257,18 @@ function generateSuggestions(
     );
   }
 
-  // Projects
   if (!lowerText.includes("project")) {
     suggestions.push(
       "Add relevant projects and mention the technologies used."
     );
   }
 
-  // Skills
   if (skills.length < 5) {
     suggestions.push(
       "Add more relevant technical skills based on your target job."
     );
   }
 
-  // Certifications
   if (
     !lowerText.includes("certification") &&
     !lowerText.includes("certificate")
@@ -262,25 +278,28 @@ function generateSuggestions(
     );
   }
 
-  // Achievements
   if (!lowerText.includes("achievement")) {
     suggestions.push(
       "Include measurable achievements using numbers and results."
     );
   }
 
-  // LinkedIn
   if (!lowerText.includes("linkedin")) {
     suggestions.push(
       "Add your LinkedIn profile to make it easier for recruiters to find you."
     );
   }
 
-  // GitHub
   if (
     !lowerText.includes("github") &&
     skills.some((skill) =>
-      ["Git", "GitHub", "JavaScript", "React", "Python"].includes(skill)
+      [
+        "Git",
+        "GitHub",
+        "JavaScript",
+        "React",
+        "Python",
+      ].includes(skill)
     )
   ) {
     suggestions.push(
@@ -288,7 +307,6 @@ function generateSuggestions(
     );
   }
 
-  // Job description
   if (
     jobDescription &&
     jobDescription.trim() &&
@@ -302,31 +320,49 @@ function generateSuggestions(
   return suggestions.slice(0, 7);
 }
 
-// ================================
+// ==========================================
 // HEALTH CHECK
-// ================================
+// ==========================================
 
 app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "ResumeAI backend is running 🚀",
+    status: "online",
+    port: PORT,
   });
 });
 
-// ================================
-// ANALYZE RESUME API
-// ================================
+// ==========================================
+// API HEALTH CHECK
+// ==========================================
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    success: true,
+    message: "API is working correctly",
+  });
+});
+
+// ==========================================
+// ANALYZE RESUME
+// ==========================================
 
 app.post(
   "/api/analyze",
   upload.single("resume"),
   async (req, res) => {
+    let parser = null;
+
     try {
       console.log("=================================");
       console.log("Resume analysis request received");
       console.log("=================================");
 
-      // Check file
+      // ------------------------------------------
+      // FILE CHECK
+      // ------------------------------------------
+
       if (!req.file) {
         return res.status(400).json({
           success: false,
@@ -338,12 +374,16 @@ app.post(
       console.log("Type:", req.file.mimetype);
       console.log("Size:", req.file.size);
 
-      const jobDescription =
-        req.body.jobDescription || "";
+      // ------------------------------------------
+      // JOB DESCRIPTION
+      // ------------------------------------------
 
-      // ================================
-      // PDF ONLY
-      // ================================
+      const jobDescription =
+        req.body?.jobDescription || "";
+
+      // ------------------------------------------
+      // PDF CHECK
+      // ------------------------------------------
 
       if (req.file.mimetype !== "application/pdf") {
         return res.status(400).json({
@@ -353,42 +393,29 @@ app.post(
         });
       }
 
-      // ================================
-      // EXTRACT PDF TEXT
-      // ================================
+      // ------------------------------------------
+      // PDF TEXT EXTRACTION
+      // pdf-parse v2
+      // ------------------------------------------
 
-      let resumeText = "";
+      console.log("Reading PDF...");
 
-      try {
-        console.log("Reading PDF...");
+      parser = new PDFParse({
+        data: req.file.buffer,
+      });
 
-        const pdfData = await pdfParse(
-          req.file.buffer
-        );
+      const pdfData = await parser.getText();
 
-        resumeText = pdfData.text || "";
+      const resumeText = pdfData.text || "";
 
-        console.log(
-          "Extracted characters:",
-          resumeText.length
-        );
-      } catch (pdfError) {
-        console.error(
-          "PDF parsing error:",
-          pdfError
-        );
+      console.log(
+        "Extracted characters:",
+        resumeText.length
+      );
 
-        return res.status(500).json({
-          success: false,
-          error:
-            "Unable to read this PDF. Please upload another text-based PDF resume.",
-          details: pdfError.message,
-        });
-      }
-
-      // ================================
+      // ------------------------------------------
       // EMPTY PDF CHECK
-      // ================================
+      // ------------------------------------------
 
       if (!resumeText.trim()) {
         return res.status(400).json({
@@ -398,9 +425,9 @@ app.post(
         });
       }
 
-      // ================================
+      // ------------------------------------------
       // ANALYSIS
-      // ================================
+      // ------------------------------------------
 
       const skills = findSkills(resumeText);
 
@@ -427,24 +454,18 @@ app.post(
           jobDescription
         );
 
-      // ================================
+      // ------------------------------------------
       // FINAL RESPONSE
-      // ================================
+      // ------------------------------------------
 
       const result = {
         success: true,
-
         fileName: req.file.originalname,
-
-        score: score,
-
-        skills: skills,
-
-        sectionsFound: sectionsFound,
-
-        jobMatchScore: jobMatchScore,
-
-        suggestions: suggestions,
+        score,
+        skills,
+        sectionsFound,
+        jobMatchScore,
+        suggestions,
       };
 
       console.log("=================================");
@@ -470,49 +491,78 @@ app.post(
 
       return res.status(500).json({
         success: false,
-        error: "Unable to analyze resume.",
+        error:
+          "Unable to analyze resume. Please try another PDF.",
         details: error.message,
       });
+    } finally {
+      // ------------------------------------------
+      // DESTROY PDF PARSER
+      // ------------------------------------------
+
+      if (parser) {
+        try {
+          await parser.destroy();
+        } catch (destroyError) {
+          console.error(
+            "PDF parser cleanup error:",
+            destroyError.message
+          );
+        }
+      }
     }
   }
 );
 
-// ================================
+// ==========================================
 // MULTER ERROR HANDLER
-// ================================
+// ==========================================
 
-app.use((error, req, res, next) => {
-  if (error instanceof multer.MulterError) {
-    if (error.code === "LIMIT_FILE_SIZE") {
+app.use(
+  (error, req, res, next) => {
+    if (error instanceof multer.MulterError) {
+      if (
+        error.code === "LIMIT_FILE_SIZE"
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "File is too large. Maximum size is 5 MB.",
+        });
+      }
+
       return res.status(400).json({
         success: false,
-        error: "File is too large. Maximum size is 5 MB.",
+        error: error.message,
       });
     }
 
-    return res.status(400).json({
+    console.error(
+      "Unhandled server error:",
+      error
+    );
+
+    return res.status(500).json({
       success: false,
-      error: error.message,
+      error: "Internal server error.",
     });
   }
+);
 
-  next(error);
-});
-
-// ================================
+// ==========================================
 // START SERVER
-// ================================
+// ==========================================
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log("");
   console.log("=================================");
   console.log("🚀 ResumeAI Backend Started");
   console.log("=================================");
   console.log(
-    `Server running on http://localhost:${PORT}`
+    `Server running on port ${PORT}`
   );
   console.log(
-    `API: http://localhost:${PORT}/api/analyze`
+    `API: /api/analyze`
   );
   console.log("=================================");
   console.log("");
