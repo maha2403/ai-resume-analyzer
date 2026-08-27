@@ -1,6 +1,9 @@
 import { useState } from "react";
 import "./App.css";
 
+const API_URL =
+  "https://jubilant-sparkle-production-4e1e.up.railway.app/api/analyze";
+
 function App() {
   const [file, setFile] = useState(null);
   const [analysis, setAnalysis] = useState(null);
@@ -8,6 +11,10 @@ function App() {
   const [jobDescription, setJobDescription] = useState("");
   const [activeCard, setActiveCard] = useState(null);
   const [error, setError] = useState("");
+
+  // =========================
+  // FILE CHANGE
+  // =========================
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files?.[0];
@@ -20,8 +27,21 @@ function App() {
       "application/msword",
     ];
 
-    if (!allowed.includes(selectedFile.type)) {
+    const isAllowedType =
+      allowed.includes(selectedFile.type) ||
+      selectedFile.name.toLowerCase().endsWith(".pdf") ||
+      selectedFile.name.toLowerCase().endsWith(".doc") ||
+      selectedFile.name.toLowerCase().endsWith(".docx");
+
+    if (!isAllowedType) {
       setError("Please upload a PDF or DOC/DOCX resume.");
+      setFile(null);
+      return;
+    }
+
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      setError("File is too large. Maximum size is 5 MB.");
+      setFile(null);
       return;
     }
 
@@ -30,6 +50,10 @@ function App() {
     setActiveCard(null);
     setError("");
   };
+
+  // =========================
+  // ANALYZE
+  // =========================
 
   const handleAnalyze = async () => {
     if (!file) {
@@ -48,34 +72,72 @@ function App() {
       formData.append("resume", file);
       formData.append("jobDescription", jobDescription);
 
-      const response = await fetch(
-        "https://jubilant-sparkle-production-4e1e.up.railway.app/api/analyze",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      console.log("Sending resume...");
+      console.log("File:", file.name);
+      console.log("Size:", file.size);
+      console.log("Type:", file.type);
+      console.log("API:", API_URL);
 
-      const data = await response.json();
+      const response = await fetch(API_URL, {
+        method: "POST",
+        body: formData,
+      });
 
-      if (!response.ok) {
+      console.log("Response status:", response.status);
+
+      const responseText = await response.text();
+
+      console.log("Raw response:", responseText);
+
+      let data = {};
+
+      try {
+        data = JSON.parse(responseText);
+      } catch {
         throw new Error(
-          data.error || "Resume analysis failed."
+          `Server returned an invalid response. Status: ${response.status}`
         );
       }
 
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            data.details ||
+            `Server error: ${response.status}`
+        );
+      }
+
+      if (!data.success) {
+        throw new Error(
+          data.error ||
+            data.details ||
+            "Resume analysis failed."
+        );
+      }
+
+      console.log("Analysis result:", data);
+
       setAnalysis({
         ...data,
+
         skills: Array.isArray(data.skills)
           ? data.skills
           : [],
-        sectionsFound: Array.isArray(data.sectionsFound)
+
+        sectionsFound: Array.isArray(
+          data.sectionsFound
+        )
           ? data.sectionsFound
           : [],
-        suggestions: Array.isArray(data.suggestions)
+
+        suggestions: Array.isArray(
+          data.suggestions
+        )
           ? data.suggestions
           : [],
+
         score: Number(data.score || 0),
+
         jobMatchScore: Number(
           data.jobMatchScore || 0
         ),
@@ -89,15 +151,31 @@ function App() {
           });
       }, 300);
     } catch (err) {
-      console.error(err);
+      console.error(
+        "=============================="
+      );
+
+      console.error(
+        "ANALYZE ERROR:",
+        err
+      );
+
+      console.error(
+        "=============================="
+      );
 
       setError(
-        "Unable to analyze resume. Please make sure the backend server is running."
+        err.message ||
+          "Unable to analyze resume."
       );
     } finally {
       setLoading(false);
     }
   };
+
+  // =========================
+  // SCORE
+  // =========================
 
   const score = analysis?.score || 0;
 
@@ -143,12 +221,24 @@ function App() {
     : 0;
 
   const experienceMatch = analysis
-    ? analysis.sectionsFound.includes("experience")
+    ? analysis.sectionsFound.includes(
+        "experience"
+      ) ||
+      analysis.sectionsFound.includes(
+        "work experience"
+      ) ||
+      analysis.sectionsFound.includes(
+        "employment"
+      )
       ? 100
       : 50
     : 0;
 
   const keywordMatch = skillsMatch;
+
+  // =========================
+  // UI
+  // =========================
 
   return (
     <div className="app">
@@ -207,12 +297,14 @@ function App() {
               in seconds.
             </p>
 
+            {/* UPLOAD */}
+
             <div className="upload-area">
 
               <input
                 type="file"
                 id="resume-upload"
-                accept=".pdf,.doc,.docx"
+                accept=".pdf,.doc,.docx,application/pdf"
                 onChange={handleFileChange}
                 hidden
               />
@@ -229,6 +321,8 @@ function App() {
               </span>
 
             </div>
+
+            {/* SELECTED FILE */}
 
             {file && (
               <div className="selected-file">
@@ -249,6 +343,8 @@ function App() {
 
               </div>
             )}
+
+            {/* JOB DESCRIPTION */}
 
             <div className="job-description-box">
 
@@ -275,11 +371,15 @@ function App() {
 
             </div>
 
+            {/* ERROR */}
+
             {error && (
               <div className="error-message">
                 ⚠️ {error}
               </div>
             )}
+
+            {/* ANALYZE BUTTON */}
 
             {file && (
               <button
@@ -433,9 +533,11 @@ function App() {
 
             </div>
 
-            {/* CARDS */}
+            {/* RESULT CARDS */}
 
             <div className="result-grid">
+
+              {/* ATS */}
 
               <button
                 className={`result-card ${
@@ -476,6 +578,8 @@ function App() {
 
               </button>
 
+              {/* SKILLS */}
+
               <button
                 className={`result-card ${
                   activeCard === "skills"
@@ -515,6 +619,8 @@ function App() {
 
               </button>
 
+              {/* SECTIONS */}
+
               <button
                 className={`result-card ${
                   activeCard === "sections"
@@ -553,6 +659,8 @@ function App() {
                 </span>
 
               </button>
+
+              {/* JOB */}
 
               <button
                 className={`result-card ${
@@ -600,9 +708,13 @@ function App() {
             {activeCard && (
               <div className="detail-panel">
 
+                {/* ATS */}
+
                 {activeCard === "ats" && (
                   <>
+
                     <div className="detail-header">
+
                       <span>🎯</span>
 
                       <div>
@@ -615,6 +727,7 @@ function App() {
                           compatibility details.
                         </p>
                       </div>
+
                     </div>
 
                     <div className="progress-item">
@@ -630,11 +743,13 @@ function App() {
                       </div>
 
                       <div className="progress-bar">
+
                         <span
                           style={{
                             width: `${score}%`,
                           }}
                         />
+
                       </div>
 
                     </div>
@@ -672,12 +787,17 @@ function App() {
                       </div>
 
                     </div>
+
                   </>
                 )}
 
+                {/* SKILLS */}
+
                 {activeCard === "skills" && (
                   <>
+
                     <div className="detail-header">
+
                       <span>🛠️</span>
 
                       <div>
@@ -690,6 +810,7 @@ function App() {
                           skills found in your resume.
                         </p>
                       </div>
+
                     </div>
 
                     <div className="skill-list">
@@ -698,8 +819,7 @@ function App() {
                         analysis.skills.map(
                           (skill, index) => (
                             <span key={index}>
-                              ✓{" "}
-                              {skill}
+                              ✓ {skill}
                             </span>
                           )
                         )
@@ -710,12 +830,17 @@ function App() {
                       )}
 
                     </div>
+
                   </>
                 )}
 
+                {/* SECTIONS */}
+
                 {activeCard === "sections" && (
                   <>
+
                     <div className="detail-header">
+
                       <span>📑</span>
 
                       <div>
@@ -728,6 +853,7 @@ function App() {
                           in your resume.
                         </p>
                       </div>
+
                     </div>
 
                     <div className="section-list">
@@ -735,6 +861,7 @@ function App() {
                       {analysis.sectionsFound.map(
                         (section, index) => (
                           <div key={index}>
+
                             <span>
                               ✓
                             </span>
@@ -749,17 +876,23 @@ function App() {
                             <small>
                               Detected
                             </small>
+
                           </div>
                         )
                       )}
 
                     </div>
+
                   </>
                 )}
 
+                {/* JOB */}
+
                 {activeCard === "job" && (
                   <>
+
                     <div className="detail-header">
+
                       <span>💼</span>
 
                       <div>
@@ -772,6 +905,7 @@ function App() {
                           matches the job description.
                         </p>
                       </div>
+
                     </div>
 
                     <div className="job-match-box">
@@ -785,11 +919,13 @@ function App() {
                       </span>
 
                       <div className="progress-bar">
+
                         <span
                           style={{
                             width: `${analysis.jobMatchScore}%`,
                           }}
                         />
+
                       </div>
 
                     </div>
@@ -801,6 +937,7 @@ function App() {
                         meaningful job match score.
                       </div>
                     )}
+
                   </>
                 )}
 
@@ -812,6 +949,7 @@ function App() {
             <div className="suggestions">
 
               <div className="suggestion-title">
+
                 <span>💡</span>
 
                 <div>
@@ -824,6 +962,7 @@ function App() {
                     for your resume.
                   </p>
                 </div>
+
               </div>
 
               {analysis.suggestions.length > 0 ? (
