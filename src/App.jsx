@@ -1,18 +1,18 @@
 import { useState } from "react";
 import "./App.css";
 
-// ========================================
+// =====================================================
 // BACKEND API
-// ========================================
+// =====================================================
 
 const API_URL =
   "https://jubilant-sparkle-production-4e1e.up.railway.app/api/analyze";
 
-function App() {
-  // ========================================
-  // STATE
-  // ========================================
+// =====================================================
+// APP
+// =====================================================
 
+function App() {
   const [file, setFile] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -20,9 +20,9 @@ function App() {
   const [activeCard, setActiveCard] = useState(null);
   const [error, setError] = useState("");
 
-  // ========================================
-  // FILE CHANGE
-  // ========================================
+  // ===================================================
+  // FILE SELECT
+  // ===================================================
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files?.[0];
@@ -31,26 +31,34 @@ function App() {
       return;
     }
 
-    console.log("Selected file:", selectedFile);
-    console.log("File name:", selectedFile.name);
-    console.log("File type:", selectedFile.type);
-    console.log("File size:", selectedFile.size);
+    const fileName = selectedFile.name.toLowerCase();
 
-    // PDF ONLY
-    const isPdf =
-      selectedFile.type === "application/pdf" ||
-      /\.pdf$/i.test(selectedFile.name);
+    const isValidFile =
+      fileName.endsWith(".pdf") ||
+      fileName.endsWith(".doc") ||
+      fileName.endsWith(".docx");
 
-    if (!isPdf) {
-      setError("Please upload a PDF resume.");
+    if (!isValidFile) {
+      setError("Please upload a PDF or DOC/DOCX resume.");
       setFile(null);
+      setAnalysis(null);
       return;
     }
 
-    // 5 MB limit
+    // Backend currently supports PDF analysis.
+    if (!fileName.endsWith(".pdf")) {
+      setError(
+        "Currently, ResumeAI analysis supports PDF resumes only. Please upload a PDF."
+      );
+      setFile(null);
+      setAnalysis(null);
+      return;
+    }
+
     if (selectedFile.size > 5 * 1024 * 1024) {
       setError("File is too large. Maximum size is 5 MB.");
       setFile(null);
+      setAnalysis(null);
       return;
     }
 
@@ -58,11 +66,18 @@ function App() {
     setAnalysis(null);
     setActiveCard(null);
     setError("");
+
+    console.log("=================================");
+    console.log("FILE SELECTED");
+    console.log("Name:", selectedFile.name);
+    console.log("Type:", selectedFile.type);
+    console.log("Size:", selectedFile.size);
+    console.log("=================================");
   };
 
-  // ========================================
+  // ===================================================
   // ANALYZE RESUME
-  // ========================================
+  // ===================================================
 
   const handleAnalyze = async () => {
     if (!file) {
@@ -71,27 +86,28 @@ function App() {
     }
 
     setLoading(true);
+    setError("");
     setAnalysis(null);
     setActiveCard(null);
-    setError("");
 
     try {
       console.log("=================================");
       console.log("RESUME ANALYSIS STARTED");
       console.log("=================================");
-      console.log("API:", API_URL);
-      console.log("File:", file.name);
-      console.log("Type:", file.type);
-      console.log("Size:", file.size);
 
-      // ========================================
+      console.log("API URL:", API_URL);
+      console.log("File:", file.name);
+      console.log("File type:", file.type);
+      console.log("File size:", file.size);
+
+      // -----------------------------------------------
       // FORM DATA
-      // ========================================
+      // -----------------------------------------------
 
       const formData = new FormData();
 
-      // IMPORTANT
-      // Backend expects upload.single("resume")
+      // IMPORTANT:
+      // Backend uses upload.single("resume")
       formData.append("resume", file);
 
       formData.append(
@@ -99,71 +115,78 @@ function App() {
         jobDescription.trim()
       );
 
-      // ========================================
-      // SEND REQUEST
-      // ========================================
+      console.log("Sending request to backend...");
+
+      // -----------------------------------------------
+      // FETCH
+      // -----------------------------------------------
 
       const response = await fetch(API_URL, {
         method: "POST",
         body: formData,
       });
 
-      console.log(
-        "Response status:",
-        response.status
-      );
+      console.log("Response status:", response.status);
+      console.log("Response OK:", response.ok);
 
-      console.log(
-        "Response OK:",
-        response.ok
-      );
-
-      // ========================================
-      // READ RESPONSE
-      // ========================================
+      // -----------------------------------------------
+      // RESPONSE TEXT
+      // -----------------------------------------------
 
       const text = await response.text();
 
-      console.log(
-        "Raw backend response:",
-        text
-      );
+      console.log("Backend raw response:", text);
+
+      if (!text) {
+        throw new Error(
+          `Backend returned an empty response. Status: ${response.status}`
+        );
+      }
+
+      // -----------------------------------------------
+      // JSON
+      // -----------------------------------------------
 
       let data;
 
       try {
         data = JSON.parse(text);
-      } catch (parseError) {
+      } catch (jsonError) {
         console.error(
-          "JSON Parse Error:",
-          parseError
+          "JSON PARSE ERROR:",
+          jsonError
         );
 
         throw new Error(
-          `Server returned an invalid response (${response.status}).`
+          `Backend returned an invalid response. Status: ${response.status}`
         );
       }
 
-      console.log(
-        "Parsed backend response:",
-        data
-      );
+      console.log("Backend JSON:", data);
 
-      // ========================================
+      // -----------------------------------------------
       // BACKEND ERROR
-      // ========================================
+      // -----------------------------------------------
 
-      if (!response.ok || data.success === false) {
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            data?.details ||
+            `Backend request failed (${response.status})`
+        );
+      }
+
+      if (data.success === false) {
         throw new Error(
           data.error ||
             data.details ||
-            `Resume analysis failed (${response.status}).`
+            "Resume analysis failed."
         );
       }
 
-      // ========================================
-      // SAVE ANALYSIS
-      // ========================================
+      // -----------------------------------------------
+      // NORMALIZE DATA
+      // -----------------------------------------------
 
       const result = {
         ...data,
@@ -172,40 +195,41 @@ function App() {
           data.fileName ||
           file.name,
 
+        score: Number(data.score || 0),
+
         skills: Array.isArray(data.skills)
           ? data.skills
           : [],
 
-        sectionsFound:
-          Array.isArray(data.sectionsFound)
-            ? data.sectionsFound
-            : [],
+        sectionsFound: Array.isArray(
+          data.sectionsFound
+        )
+          ? data.sectionsFound
+          : [],
 
-        suggestions:
-          Array.isArray(data.suggestions)
-            ? data.suggestions
-            : [],
-
-        score: Number(
-          data.score || 0
-        ),
+        suggestions: Array.isArray(
+          data.suggestions
+        )
+          ? data.suggestions
+          : [],
 
         jobMatchScore: Number(
           data.jobMatchScore || 0
         ),
       };
 
-      console.log(
-        "FINAL ANALYSIS:",
-        result
-      );
+      // -----------------------------------------------
+      // SUCCESS
+      // -----------------------------------------------
+
+      console.log("=================================");
+      console.log("ANALYSIS SUCCESSFUL");
+      console.log(result);
+      console.log("=================================");
 
       setAnalysis(result);
 
-      // ========================================
-      // SCROLL TO RESULTS
-      // ========================================
-
+      // Scroll to results
       setTimeout(() => {
         document
           .getElementById("results")
@@ -214,40 +238,43 @@ function App() {
             block: "start",
           });
       }, 300);
-
     } catch (err) {
-      console.error(
-        "================================="
-      );
+      console.error("=================================");
+      console.error("ANALYZE ERROR");
+      console.error(err);
+      console.error("=================================");
 
-      console.error(
-        "ANALYZE ERROR:",
-        err
-      );
+      let message =
+        "Unable to analyze resume. Please try again.";
 
-      console.error(
-        "================================="
-      );
+      // Network / CORS / connection error
+      if (
+        err instanceof TypeError &&
+        err.message
+          .toLowerCase()
+          .includes("fetch")
+      ) {
+        message =
+          "Unable to connect to the backend. Please check the Railway backend URL and CORS settings.";
+      } else if (err?.message) {
+        message = err.message;
+      }
 
-      setError(
-        err?.message ||
-          "Unable to analyze resume. Please try again."
-      );
-
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ========================================
+  // ===================================================
   // SCORE
-  // ========================================
+  // ===================================================
 
   const score = analysis?.score || 0;
 
-  // ========================================
+  // ===================================================
   // STATUS
-  // ========================================
+  // ===================================================
 
   const getStatus = () => {
     if (score >= 86) {
@@ -287,9 +314,9 @@ function App() {
 
   const status = getStatus();
 
-  // ========================================
-  // MATCH SCORES
-  // ========================================
+  // ===================================================
+  // MATCH CALCULATIONS
+  // ===================================================
 
   const skillsMatch = analysis
     ? Math.min(
@@ -302,7 +329,7 @@ function App() {
     ? analysis.sectionsFound.some(
         (section) => {
           const value =
-            section.toLowerCase();
+            String(section).toLowerCase();
 
           return (
             value.includes("experience") ||
@@ -314,18 +341,34 @@ function App() {
       : 50
     : 0;
 
-  const keywordMatch = skillsMatch;
+  const keywordMatch = analysis
+    ? analysis.jobMatchScore > 0
+      ? analysis.jobMatchScore
+      : skillsMatch
+    : 0;
 
-  // ========================================
-  // RENDER
-  // ========================================
+  // ===================================================
+  // TOGGLE CARD
+  // ===================================================
+
+  const toggleCard = (card) => {
+    setActiveCard(
+      activeCard === card
+        ? null
+        : card
+    );
+  };
+
+  // ===================================================
+  // UI
+  // ===================================================
 
   return (
     <div className="app">
 
-      {/* ======================================
+      {/* =================================================
           NAVBAR
-      ====================================== */}
+      ================================================= */}
 
       <nav className="navbar">
 
@@ -334,7 +377,6 @@ function App() {
         </div>
 
         <div className="nav-links">
-
           <a href="#home">
             Home
           </a>
@@ -346,11 +388,11 @@ function App() {
           <a href="#results">
             Results
           </a>
-
         </div>
 
         <button
           className="nav-btn"
+          type="button"
           onClick={() =>
             document
               .getElementById(
@@ -366,9 +408,9 @@ function App() {
 
       <main>
 
-        {/* ======================================
+        {/* =================================================
             HERO
-        ====================================== */}
+        ================================================= */}
 
         <section
           id="home"
@@ -383,27 +425,29 @@ function App() {
 
             <h1>
               Build a Resume That
-              <span> Gets Noticed.</span>
+              <span>
+                {" "}Gets Noticed.
+              </span>
             </h1>
 
             <p>
-              Upload your resume and let ResumeAI
-              analyze your ATS score, skills,
-              resume sections and job compatibility
-              in seconds.
+              Upload your resume and let
+              ResumeAI analyze your ATS score,
+              skills, resume sections and job
+              compatibility in seconds.
             </p>
 
-            {/* UPLOAD */}
+            {/* ===========================================
+                UPLOAD
+            =========================================== */}
 
             <div className="upload-area">
 
               <input
                 type="file"
                 id="resume-upload"
-                accept=".pdf,application/pdf"
-                onChange={
-                  handleFileChange
-                }
+                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleFileChange}
                 hidden
               />
 
@@ -415,12 +459,14 @@ function App() {
               </label>
 
               <span className="upload-hint">
-                PDF only • Maximum 5 MB
+                PDF, DOC or DOCX
               </span>
 
             </div>
 
-            {/* SELECTED FILE */}
+            {/* ===========================================
+                SELECTED FILE
+            =========================================== */}
 
             {file && (
               <div className="selected-file">
@@ -430,7 +476,6 @@ function App() {
                 </div>
 
                 <div>
-
                   <strong>
                     {file.name}
                   </strong>
@@ -438,19 +483,18 @@ function App() {
                   <small>
                     ✓ Resume selected successfully
                   </small>
-
                 </div>
 
               </div>
             )}
 
-            {/* JOB DESCRIPTION */}
+            {/* ===========================================
+                JOB DESCRIPTION
+            =========================================== */}
 
             <div className="job-description-box">
 
-              <label
-                htmlFor="job-description"
-              >
+              <label htmlFor="job-description">
                 💼 Job Description
               </label>
 
@@ -473,7 +517,9 @@ function App() {
 
             </div>
 
-            {/* ERROR */}
+            {/* ===========================================
+                ERROR
+            =========================================== */}
 
             {error && (
               <div className="error-message">
@@ -481,19 +527,20 @@ function App() {
               </div>
             )}
 
-            {/* ANALYZE */}
+            {/* ===========================================
+                ANALYZE BUTTON
+            =========================================== */}
 
             {file && (
               <button
                 className="analyze-btn"
+                type="button"
                 onClick={handleAnalyze}
                 disabled={loading}
               >
-
                 {loading
                   ? "⏳ Analyzing Resume..."
                   : "🚀 Analyze My Resume"}
-
               </button>
             )}
 
@@ -504,16 +551,15 @@ function App() {
 
           </div>
 
-          {/* ======================================
+          {/* =================================================
               PREVIEW CARD
-          ====================================== */}
+          ================================================= */}
 
           <div className="hero-card">
 
             <div className="card-header">
 
               <div>
-
                 <span className="card-title">
                   Resume Analysis
                 </span>
@@ -521,7 +567,6 @@ function App() {
                 <small>
                   AI-powered report
                 </small>
-
               </div>
 
               <span className="status">
@@ -549,7 +594,6 @@ function App() {
             </div>
 
             <div className="analysis-item">
-
               <span>
                 ✓ Skills Match
               </span>
@@ -559,11 +603,9 @@ function App() {
                   ? `${skillsMatch}%`
                   : "--"}
               </strong>
-
             </div>
 
             <div className="analysis-item">
-
               <span>
                 ✓ Experience
               </span>
@@ -573,11 +615,9 @@ function App() {
                   ? `${experienceMatch}%`
                   : "--"}
               </strong>
-
             </div>
 
             <div className="analysis-item">
-
               <span>
                 ✓ Keywords
               </span>
@@ -587,19 +627,17 @@ function App() {
                   ? `${keywordMatch}%`
                   : "--"}
               </strong>
-
             </div>
 
           </div>
 
         </section>
 
-        {/* ======================================
+        {/* =================================================
             RESULTS
-        ====================================== */}
+        ================================================= */}
 
         {analysis && (
-
           <section
             id="results"
             className="results-section"
@@ -624,7 +662,9 @@ function App() {
 
             </div>
 
-            {/* STATUS */}
+            {/* =============================================
+                STATUS
+            ============================================= */}
 
             <div className="score-status">
 
@@ -633,7 +673,6 @@ function App() {
               </div>
 
               <div>
-
                 <strong>
                   {status.title}
                 </strong>
@@ -641,29 +680,27 @@ function App() {
                 <p>
                   {status.text}
                 </p>
-
               </div>
 
             </div>
 
-            {/* RESULT GRID */}
+            {/* =============================================
+                RESULT CARDS
+            ============================================= */}
 
             <div className="result-grid">
 
               {/* ATS */}
 
               <button
+                type="button"
                 className={`result-card ${
                   activeCard === "ats"
                     ? "active"
                     : ""
                 }`}
                 onClick={() =>
-                  setActiveCard(
-                    activeCard === "ats"
-                      ? null
-                      : "ats"
-                  )
+                  toggleCard("ats")
                 }
               >
 
@@ -694,17 +731,14 @@ function App() {
               {/* SKILLS */}
 
               <button
+                type="button"
                 className={`result-card ${
                   activeCard === "skills"
                     ? "active"
                     : ""
                 }`}
                 onClick={() =>
-                  setActiveCard(
-                    activeCard === "skills"
-                      ? null
-                      : "skills"
-                  )
+                  toggleCard("skills")
                 }
               >
 
@@ -735,17 +769,14 @@ function App() {
               {/* SECTIONS */}
 
               <button
+                type="button"
                 className={`result-card ${
                   activeCard === "sections"
                     ? "active"
                     : ""
                 }`}
                 onClick={() =>
-                  setActiveCard(
-                    activeCard === "sections"
-                      ? null
-                      : "sections"
-                  )
+                  toggleCard("sections")
                 }
               >
 
@@ -773,20 +804,17 @@ function App() {
 
               </button>
 
-              {/* JOB MATCH */}
+              {/* JOB */}
 
               <button
+                type="button"
                 className={`result-card ${
                   activeCard === "job"
                     ? "active"
                     : ""
                 }`}
                 onClick={() =>
-                  setActiveCard(
-                    activeCard === "job"
-                      ? null
-                      : "job"
-                  )
+                  toggleCard("job")
                 }
               >
 
@@ -816,12 +844,11 @@ function App() {
 
             </div>
 
-            {/* ==================================
+            {/* =================================================
                 DETAIL PANEL
-            ================================== */}
+            ================================================= */}
 
             {activeCard && (
-
               <div className="detail-panel">
 
                 {/* ATS */}
@@ -830,10 +857,11 @@ function App() {
                   <>
                     <div className="detail-header">
 
-                      <span>🎯</span>
+                      <span>
+                        🎯
+                      </span>
 
                       <div>
-
                         <h3>
                           ATS Score Breakdown
                         </h3>
@@ -842,7 +870,6 @@ function App() {
                           Your resume's ATS
                           compatibility details.
                         </p>
-
                       </div>
 
                     </div>
@@ -850,7 +877,6 @@ function App() {
                     <div className="progress-item">
 
                       <div>
-
                         <span>
                           Overall ATS Score
                         </span>
@@ -858,15 +884,13 @@ function App() {
                         <strong>
                           {score}%
                         </strong>
-
                       </div>
 
                       <div className="progress-bar">
 
                         <span
                           style={{
-                            width:
-                              `${score}%`,
+                            width: `${score}%`,
                           }}
                         />
 
@@ -914,13 +938,13 @@ function App() {
 
                 {activeCard === "skills" && (
                   <>
-
                     <div className="detail-header">
 
-                      <span>🛠️</span>
+                      <span>
+                        🛠️
+                      </span>
 
                       <div>
-
                         <h3>
                           Skills Detected
                         </h3>
@@ -929,7 +953,6 @@ function App() {
                           Technical and professional
                           skills found in your resume.
                         </p>
-
                       </div>
 
                     </div>
@@ -937,29 +960,22 @@ function App() {
                     <div className="skill-list">
 
                       {analysis.skills.length > 0 ? (
-
                         analysis.skills.map(
                           (skill, index) => (
-
                             <span
-                              key={index}
+                              key={`${skill}-${index}`}
                             >
                               ✓ {skill}
                             </span>
-
                           )
                         )
-
                       ) : (
-
                         <p>
                           No specific skills detected.
                         </p>
-
                       )}
 
                     </div>
-
                   </>
                 )}
 
@@ -967,13 +983,13 @@ function App() {
 
                 {activeCard === "sections" && (
                   <>
-
                     <div className="detail-header">
 
-                      <span>📑</span>
+                      <span>
+                        📑
+                      </span>
 
                       <div>
-
                         <h3>
                           Resume Sections
                         </h3>
@@ -982,56 +998,64 @@ function App() {
                           Important sections found
                           in your resume.
                         </p>
-
                       </div>
 
                     </div>
 
                     <div className="section-list">
 
-                      {analysis.sectionsFound.map(
-                        (section, index) => (
+                      {analysis.sectionsFound.length >
+                      0 ? (
+                        analysis.sectionsFound.map(
+                          (
+                            section,
+                            index
+                          ) => (
+                            <div
+                              key={`${section}-${index}`}
+                            >
 
-                          <div
-                            key={index}
-                          >
+                              <span>
+                                ✓
+                              </span>
 
-                            <span>
-                              ✓
-                            </span>
+                              <strong>
+                                {String(section)
+                                  .charAt(0)
+                                  .toUpperCase() +
+                                  String(section).slice(
+                                    1
+                                  )}
+                              </strong>
 
-                            <strong>
-                              {section
-                                .charAt(0)
-                                .toUpperCase() +
-                                section.slice(1)}
-                            </strong>
+                              <small>
+                                Detected
+                              </small>
 
-                            <small>
-                              Detected
-                            </small>
-
-                          </div>
-
+                            </div>
+                          )
                         )
+                      ) : (
+                        <p>
+                          No resume sections detected.
+                        </p>
                       )}
 
                     </div>
-
                   </>
                 )}
 
-                {/* JOB */}
+                {/* JOB MATCH */}
 
                 {activeCard === "job" && (
                   <>
-
                     <div className="detail-header">
 
-                      <span>💼</span>
+                      <span>
+                        💼
+                      </span>
 
                       <div>
-
                         <h3>
                           Job Match Analysis
                         </h3>
@@ -1040,7 +1064,6 @@ function App() {
                           How closely your resume
                           matches the job description.
                         </p>
-
                       </div>
 
                     </div>
@@ -1059,8 +1082,7 @@ function App() {
 
                         <span
                           style={{
-                            width:
-                              `${analysis.jobMatchScore}%`,
+                            width: `${analysis.jobMatchScore}%`,
                           }}
                         />
 
@@ -1069,27 +1091,22 @@ function App() {
                     </div>
 
                     {!jobDescription.trim() && (
-
                       <div className="info-box">
-
                         💡 Add a job description
                         before analyzing to get a
                         meaningful job match score.
-
                       </div>
-
                     )}
 
                   </>
                 )}
 
               </div>
-
             )}
 
-            {/* ==================================
+            {/* =================================================
                 SUGGESTIONS
-            ================================== */}
+            ================================================= */}
 
             <div className="suggestions">
 
@@ -1100,7 +1117,6 @@ function App() {
                 </span>
 
                 <div>
-
                   <h3>
                     Smart Suggestions
                   </h3>
@@ -1109,19 +1125,19 @@ function App() {
                     Personalized improvements
                     for your resume.
                   </p>
-
                 </div>
 
               </div>
 
               {analysis.suggestions.length > 0 ? (
-
                 analysis.suggestions.map(
-                  (suggestion, index) => (
-
+                  (
+                    suggestion,
+                    index
+                  ) => (
                     <div
                       className="suggestion"
-                      key={index}
+                      key={`${index}-${suggestion}`}
                     >
 
                       <span>
@@ -1131,12 +1147,9 @@ function App() {
                       {suggestion}
 
                     </div>
-
                   )
                 )
-
               ) : (
-
                 <div className="suggestion">
 
                   <span>
@@ -1146,18 +1159,16 @@ function App() {
                   Your resume looks good!
 
                 </div>
-
               )}
 
             </div>
 
           </section>
-
         )}
 
-        {/* ======================================
+        {/* =================================================
             FEATURES
-        ====================================== */}
+        ================================================= */}
 
         <section
           id="features"
@@ -1171,7 +1182,7 @@ function App() {
           <h2>
             Everything You Need to Improve
             <span>
-              Your Resume
+              {" "}Your Resume
             </span>
           </h2>
 
@@ -1240,9 +1251,9 @@ function App() {
 
         </section>
 
-        {/* ======================================
+        {/* =================================================
             FOOTER
-        ====================================== */}
+        ================================================= */}
 
         <footer className="footer">
 
