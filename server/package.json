@@ -1,0 +1,14 @@
+{
+  "name": "resumeai-backend",
+  "version": "1.0.0",
+  "main": "server.cjs",
+  "scripts": {
+    "start": "node server.cjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "pdf-parse": "^2.4.5"
+  }
+}
