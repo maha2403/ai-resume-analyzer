@@ -7,16 +7,22 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ===============================
-// MIDDLEWARE
+// CORS
 // ===============================
 
 app.use(
   cors({
     origin: "*",
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+app.options("*", cors());
+
+// ===============================
+// JSON
+// ===============================
 
 app.use(express.json());
 
@@ -93,14 +99,11 @@ const sectionNames = [
   "certifications",
   "certificate",
   "achievements",
-  "achievement",
   "internship",
   "internships",
   "contact",
   "profile",
   "languages",
-  "linkedin",
-  "github",
 ];
 
 // ===============================
@@ -307,7 +310,7 @@ app.get("/", (req, res) => {
 });
 
 // ===============================
-// HEALTH CHECK
+// HEALTH
 // ===============================
 
 app.get("/api/health", (req, res) => {
@@ -330,48 +333,65 @@ app.post(
 
     try {
       console.log("=================================");
-      console.log("Resume analysis request received");
-      console.log("=================================");
+      console.log("ANALYZE REQUEST RECEIVED");
 
-      // --------------------------------
-      // CHECK FILE
-      // --------------------------------
+      // -------------------------------
+      // Check file
+      // -------------------------------
 
       if (!req.file) {
+        console.log("ERROR: No file received");
+
         return res.status(400).json({
           success: false,
           error: "Please upload a PDF resume.",
         });
       }
 
-      console.log("File:", req.file.originalname);
-      console.log("MIME:", req.file.mimetype);
-      console.log("Size:", req.file.size);
+      console.log(
+        "File:",
+        req.file.originalname
+      );
 
-      // --------------------------------
-      // FILE TYPE CHECK
-      // --------------------------------
+      console.log(
+        "Mimetype:",
+        req.file.mimetype
+      );
 
-      const fileName =
-        req.file.originalname.toLowerCase();
+      console.log(
+        "Size:",
+        req.file.size
+      );
 
-      if (!fileName.endsWith(".pdf")) {
+      // -------------------------------
+      // Check PDF
+      // -------------------------------
+
+      if (
+        req.file.mimetype !==
+        "application/pdf"
+      ) {
         return res.status(400).json({
           success: false,
           error: "Only PDF resumes are supported.",
         });
       }
 
-      // --------------------------------
-      // JOB DESCRIPTION
-      // --------------------------------
+      // -------------------------------
+      // Job description
+      // -------------------------------
 
       const jobDescription =
         req.body?.jobDescription || "";
 
-      // --------------------------------
-      // PDF PARSER
-      // --------------------------------
+      console.log(
+        "Job description received:",
+        Boolean(jobDescription.trim())
+      );
+
+      // -------------------------------
+      // PDF Parser
+      // -------------------------------
 
       console.log("Reading PDF...");
 
@@ -389,21 +409,21 @@ app.post(
         resumeText.length
       );
 
-      // --------------------------------
-      // EMPTY PDF CHECK
-      // --------------------------------
+      // -------------------------------
+      // Empty PDF check
+      // -------------------------------
 
       if (!resumeText.trim()) {
         return res.status(400).json({
           success: false,
           error:
-            "No readable text found in this PDF. Please upload a text-based PDF.",
+            "No readable text found in this PDF.",
         });
       }
 
-      // --------------------------------
-      // ANALYSIS
-      // --------------------------------
+      // -------------------------------
+      // Analysis
+      // -------------------------------
 
       const skills =
         findSkills(resumeText);
@@ -431,33 +451,49 @@ app.post(
           jobDescription
         );
 
-      // --------------------------------
-      // RESPONSE
-      // --------------------------------
+      console.log(
+        "Skills found:",
+        skills
+      );
 
-      const result = {
+      console.log(
+        "Sections found:",
+        sectionsFound
+      );
+
+      console.log(
+        "ATS score:",
+        score
+      );
+
+      console.log(
+        "Job match:",
+        jobMatchScore
+      );
+
+      // -------------------------------
+      // Response
+      // -------------------------------
+
+      return res.json({
         success: true,
 
         fileName:
           req.file.originalname,
 
-        score,
+        score: score,
 
-        skills,
+        skills: skills,
 
-        sectionsFound,
+        sectionsFound:
+          sectionsFound,
 
-        jobMatchScore,
+        jobMatchScore:
+          jobMatchScore,
 
-        suggestions,
-      };
-
-      console.log(
-        "Analysis successful:",
-        result
-      );
-
-      return res.json(result);
+        suggestions:
+          suggestions,
+      });
 
     } catch (error) {
       console.error(
@@ -465,7 +501,10 @@ app.post(
       );
 
       console.error(
-        "ANALYSIS ERROR:",
+        "ANALYSIS ERROR:"
+      );
+
+      console.error(
         error
       );
 
@@ -478,14 +517,13 @@ app.post(
         error:
           "Unable to analyze resume.",
         details:
-          error?.message ||
-          "Unknown server error.",
+          error.message,
       });
 
     } finally {
-      // --------------------------------
-      // CLEAN PDF PARSER
-      // --------------------------------
+      // -------------------------------
+      // Parser cleanup
+      // -------------------------------
 
       if (parser) {
         try {
@@ -502,7 +540,7 @@ app.post(
 );
 
 // ===============================
-// MULTER / SERVER ERROR HANDLER
+// MULTER / SERVER ERROR
 // ===============================
 
 app.use(
@@ -525,18 +563,12 @@ app.use(
             "File is too large. Maximum size is 5 MB.",
         });
       }
-
-      return res.status(400).json({
-        success: false,
-        error:
-          "File upload failed.",
-      });
     }
 
     return res.status(500).json({
       success: false,
       error:
-        error?.message ||
+        error.message ||
         "Internal server error.",
     });
   }
@@ -559,7 +591,8 @@ app.listen(
     );
 
     console.log(
-      "Port: " + PORT
+      "Port:",
+      PORT
     );
 
     console.log(
