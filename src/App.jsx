@@ -182,8 +182,12 @@ function App() {
   const experienceMatch = analysis
     ? analysis.sectionsFound.some(
         (section) =>
-          section.toLowerCase().includes("experience") ||
-          section.toLowerCase().includes("employment")
+          section
+            .toLowerCase()
+            .includes("experience") ||
+          section
+            .toLowerCase()
+            .includes("employment")
       )
       ? 100
       : 50
@@ -197,7 +201,6 @@ function App() {
       {/* NAVBAR */}
 
       <nav className="navbar">
-
         <div className="logo">
           Resume<span>AI</span>
         </div>
@@ -218,7 +221,6 @@ function App() {
         >
           Get Started
         </button>
-
       </nav>
 
       <main>
@@ -380,7 +382,6 @@ function App() {
             </div>
 
             <div className="analysis-item">
-
               <span>
                 ✓ Skills Match
               </span>
@@ -390,11 +391,9 @@ function App() {
                   ? `${skillsMatch}%`
                   : "--"}
               </strong>
-
             </div>
 
             <div className="analysis-item">
-
               <span>
                 ✓ Experience
               </span>
@@ -404,11 +403,9 @@ function App() {
                   ? `${experienceMatch}%`
                   : "--"}
               </strong>
-
             </div>
 
             <div className="analysis-item">
-
               <span>
                 ✓ Keywords
               </span>
@@ -418,7 +415,6 @@ function App() {
                   ? `${keywordMatch}%`
                   : "--"}
               </strong>
-
             </div>
 
           </div>
@@ -461,6 +457,7 @@ function App() {
               </div>
 
               <div>
+
                 <strong>
                   {status.title}
                 </strong>
@@ -468,6 +465,7 @@ function App() {
                 <p>
                   {status.text}
                 </p>
+
               </div>
 
             </div>
@@ -643,9 +641,7 @@ function App() {
                   <>
                     <div className="detail-header">
 
-                      <span>
-                        🎯
-                      </span>
+                      <span>🎯</span>
 
                       <div>
                         <h3>
@@ -722,9 +718,7 @@ function App() {
                   <>
                     <div className="detail-header">
 
-                      <span>
-                        🛠️
-                      </span>
+                      <span>🛠️</span>
 
                       <div>
                         <h3>
@@ -763,9 +757,7 @@ function App() {
                   <>
                     <div className="detail-header">
 
-                      <span>
-                        📑
-                      </span>
+                      <span>📑</span>
 
                       <div>
                         <h3>
@@ -813,9 +805,7 @@ function App() {
                   <>
                     <div className="detail-header">
 
-                      <span>
-                        💼
-                      </span>
+                      <span>💼</span>
 
                       <div>
                         <h3>
@@ -898,21 +888,25 @@ function App() {
                       className="suggestion"
                       key={index}
                     >
+
                       <span>
                         ✓
                       </span>
 
                       {suggestion}
+
                     </div>
                   )
                 )
               ) : (
                 <div className="suggestion">
+
                   <span>
                     ✓
                   </span>
 
                   Your resume looks good!
+
                 </div>
               )}
 
@@ -1024,7 +1018,6 @@ function App() {
         </footer>
 
       </main>
-
     </div>
   );
 }
